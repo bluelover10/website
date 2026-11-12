@@ -1,6 +1,6 @@
 // Marketing sections: Navbar, Hero, Card, FeatureGrid, Testimonials, Pricing, Footer, SocialLinks
 import React from 'react';
-import { Twitter, Github, Linkedin, Facebook, Instagram, Youtube } from 'lucide-react';
+import { Twitter, Github, Linkedin, Facebook, Instagram, Youtube, Share2 } from 'lucide-react';
 
 function px(v) { return typeof v === 'number' ? `${v}px` : v; }
 

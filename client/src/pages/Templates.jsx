@@ -1,13 +1,24 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LayoutTemplate, Search } from 'lucide-react';
+import { LayoutTemplate, Search, ArrowRight } from 'lucide-react';
 import templateService from '../services/template.service.js';
 import useWebsiteStore from '../store/websiteStore.js';
 import useUiStore from '../store/uiStore.js';
-import Card from '../components/Card.jsx';
 import Button from '../components/Button.jsx';
+import Badge from '../components/Badge.jsx';
 import EmptyState from '../components/EmptyState.jsx';
+import Reveal from '../components/Reveal.jsx';
 import { SkeletonCard } from '../components/Skeleton.jsx';
+import { cn } from '../utils/cn.js';
+
+const categoryTints = {
+  business: 'from-primary-500 to-primary-800',
+  portfolio: 'from-accent-400 to-accent-700',
+  blog: 'from-sky-500 to-sky-800',
+  ecommerce: 'from-emerald-500 to-emerald-800',
+  'landing page': 'from-violet-500 to-violet-800',
+  general: 'from-slate-500 to-slate-800',
+};
 
 export function Templates() {
   const navigate = useNavigate();
@@ -24,7 +35,10 @@ export function Templates() {
       .finally(() => setLoading(false));
   }, []);
 
-  const filtered = templates.filter((t) => !q || t.name?.toLowerCase().includes(q.toLowerCase()));
+  const filtered = useMemo(
+    () => templates.filter((t) => !q || t.name?.toLowerCase().includes(q.toLowerCase())),
+    [templates, q]
+  );
 
   const useTemplate = async (t) => {
     try {
@@ -38,34 +52,56 @@ export function Templates() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <Reveal className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Templates</h1>
-          <p className="text-sm text-slate-500">Start from a polished design.</p>
+          <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">Templates</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Start from a polished design — pages and blocks included.</p>
         </div>
         <div className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search templates…" className="sf-input pl-9" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search templates…" aria-label="Search templates" className="sf-input pl-9" />
         </div>
-      </div>
+      </Reveal>
 
       {loading ? (
         <div className="grid gap-4 md:grid-cols-3">{[0, 1, 2].map((i) => <SkeletonCard key={i} />)}</div>
       ) : filtered.length === 0 ? (
-        <EmptyState icon={<LayoutTemplate size={32} />} title="No templates" description="Templates will appear here once added." />
+        <EmptyState icon={<LayoutTemplate size={30} />} title="No templates" description="Templates will appear here once added." />
       ) : (
-        <div className="grid gap-4 md:grid-cols-3">
-          {filtered.map((t) => {
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {filtered.map((t, i) => {
             const tid = t._id || t.id;
+            const category = (t.category || 'general').toLowerCase();
             return (
-              <Card key={tid} className="overflow-hidden p-0">
-                {t.thumbnail ? <img src={t.thumbnail} alt={t.name} className="h-40 w-full object-cover" /> : <div className="flex h-40 items-center justify-center bg-slate-100 dark:bg-slate-800"><LayoutTemplate className="text-slate-400" /></div>}
-                <div className="p-4">
-                  <p className="font-semibold">{t.name}</p>
-                  <p className="text-xs text-slate-500">{t.category || 'General'}</p>
-                  <Button size="sm" className="mt-3 w-full" onClick={() => useTemplate(t)}>Use template</Button>
-                </div>
-              </Card>
+              <Reveal key={tid} delay={i * 60} direction="scale">
+                <article className="group sf-card flex h-full flex-col overflow-hidden p-0 transition-all duration-300 hover:-translate-y-1 hover:shadow-pop">
+                  <div className={cn('relative h-40 overflow-hidden bg-gradient-to-br', categoryTints[category] || categoryTints.general)}>
+                    <div className="pointer-events-none absolute inset-0 opacity-20 sf-canvas-grid" />
+                    {t.thumbnail ? (
+                      <img
+                        src={t.thumbnail}
+                        alt={t.name}
+                        loading="lazy"
+                        className="h-full w-full object-cover transition-transform duration-500 ease-swift group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center">
+                        <LayoutTemplate size={34} className="text-white/80 transition-transform duration-500 group-hover:scale-110" />
+                      </div>
+                    )}
+                    <span className="absolute left-3 top-3">
+                      <Badge variant="default" className="bg-white/90 capitalize text-slate-800 backdrop-blur">{t.category || 'General'}</Badge>
+                    </span>
+                  </div>
+                  <div className="flex flex-1 flex-col p-4">
+                    <h2 className="font-display text-base font-bold tracking-tight">{t.name}</h2>
+                    {t.description && <p className="mt-1 line-clamp-2 flex-1 text-xs text-slate-500 dark:text-slate-400">{t.description}</p>}
+                    <Button size="sm" variant="gradient" className="mt-4 w-full justify-center" onClick={() => useTemplate(t)}>
+                      Use template <ArrowRight size={14} />
+                    </Button>
+                  </div>
+                </article>
+              </Reveal>
             );
           })}
         </div>

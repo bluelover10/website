@@ -41,14 +41,6 @@ const websiteService = {
     const { data } = await api.put(`/websites/${id}/navigation`, { navigation });
     return data?.data ?? data;
   },
-  async listVersions(id) {
-    const { data } = await api.get(`/websites/${id}/versions`);
-    return data?.data ?? data;
-  },
-  async restoreVersion(id, versionId) {
-    const { data } = await api.post(`/websites/${id}/versions/${versionId}/restore`);
-    return data?.data ?? data;
-  },
 };
 
 export default websiteService;

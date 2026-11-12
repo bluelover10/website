@@ -1,5 +1,18 @@
 // Page API service — CONTRACT: getPages(websiteId), createPage, updatePage(websiteId,pageId,data), etc.
 // Built on the shared axios instance (baseURL /api, token siteforge_token).
+//
+// Server contract (server/src/routes/pages.routes.js):
+//   GET    /websites/:websiteId/pages
+//   POST   /websites/:websiteId/pages                      {title,slug,...}
+//   POST   /websites/:websiteId/pages/reorder              {pageIds:[...]}
+//   GET    /websites/:websiteId/pages/:pageId
+//   PUT    /websites/:websiteId/pages/:pageId
+//   DELETE /websites/:websiteId/pages/:pageId
+//   POST   /websites/:websiteId/pages/:pageId/duplicate
+//   POST   /websites/:websiteId/pages/:pageId/set-home
+//   GET    /websites/:websiteId/pages/:pageId/versions
+//   POST   /websites/:websiteId/pages/:pageId/versions/snapshot
+//   POST   /websites/:websiteId/pages/:pageId/versions/:versionNumber/restore
 import api from './api.js';
 
 function unwrap(promise) {
@@ -43,29 +56,34 @@ export async function duplicatePage(websiteId, pageId) {
 }
 
 export async function reorderPages(websiteId, orderedIds) {
-  return unwrap(api.put(`/websites/${websiteId}/pages/reorder`, { order: orderedIds }));
+  // Server expects POST with { orderedIds } (see reorderPagesSchema).
+  return unwrap(api.post(`/websites/${websiteId}/pages/reorder`, { orderedIds }));
 }
 
 export async function setHomePage(websiteId, pageId) {
-  return unwrap(api.put(`/websites/${websiteId}/pages/${pageId}/home`));
+  return unwrap(api.post(`/websites/${websiteId}/pages/${pageId}/set-home`));
 }
 
 export async function updatePageSlug(websiteId, pageId, slug) {
   return updatePage(websiteId, pageId, { slug });
 }
 
-// Versions
-export async function getVersions(pageId) {
-  const res = await unwrap(api.get(`/pages/${pageId}/versions`));
+// ---- Versions (nested under the website so the role check can resolve it) ----
+export async function getVersions(websiteId, pageId) {
+  if (!websiteId) return [];
+  const res = await unwrap(api.get(`/websites/${websiteId}/pages/${pageId}/versions`));
   return Array.isArray(res) ? res : res?.versions || [];
 }
 
-export async function createVersion(pageId, snapshot) {
-  return unwrap(api.post(`/pages/${pageId}/versions`, snapshot ? { content: snapshot } : {}));
+export async function createVersion(websiteId, pageId) {
+  if (!websiteId) return null;
+  return unwrap(api.post(`/websites/${websiteId}/pages/${pageId}/versions/snapshot`, {}));
 }
 
-export async function restoreVersion(pageId, versionId) {
-  return unwrap(api.post(`/pages/${pageId}/versions/${versionId}/restore`));
+export async function restoreVersion(websiteId, pageId, versionNumber) {
+  if (!websiteId) return null;
+  // Server restores by versionNumber, not by document id.
+  return unwrap(api.post(`/websites/${websiteId}/pages/${pageId}/versions/${versionNumber}/restore`, {}));
 }
 
 // Website helpers used by panels
@@ -75,11 +93,7 @@ export async function getWebsite(websiteId) {
 }
 
 export async function updateWebsiteTheme(websiteId, theme) {
-  try {
-    return await unwrap(api.put(`/websites/${websiteId}/theme`, { theme }));
-  } catch {
-    return unwrap(api.put(`/websites/${websiteId}`, { theme }));
-  }
+  return unwrap(api.put(`/websites/${websiteId}/theme`, { theme }));
 }
 
 export async function publishWebsite(websiteId) {
@@ -91,31 +105,14 @@ export async function publishWebsite(websiteId) {
 }
 
 // ---- Shell-compat aliases (used by client shell pages/hooks) ----
-// listByWebsite/get/create/update/remove/duplicate wrap the canonical API
-// and also support direct /pages/:id endpoints.
 export async function listByWebsite(websiteId, params = {}) {
-  try {
-    const res = await unwrap(api.get(`/websites/${websiteId}/pages`, { params }));
-    return Array.isArray(res) ? res : res?.pages || res?.items || [];
-  } catch {
-    return getPages(websiteId);
-  }
+  return getPages(websiteId);
 }
 
 export async function get(id, websiteId) {
-  // get(pageId) or get(pageId, websiteId)
-  if (websiteId) {
-    try {
-      return await getPage(websiteId, id);
-    } catch {
-      // fall through to direct endpoint
-    }
-  }
-  try {
-    return await unwrap(api.get(`/pages/${id}`));
-  } catch {
-    return getPage(websiteId || 'unknown', id);
-  }
+  if (websiteId) return getPage(websiteId, id);
+  // Without a websiteId there is no valid route for a single page.
+  throw new Error('get(page, websiteId) requires a websiteId');
 }
 
 export async function create(websiteId, data = {}) {
@@ -123,31 +120,18 @@ export async function create(websiteId, data = {}) {
 }
 
 export async function update(id, data, websiteId) {
-  // update(pageId, data) preferred; falls back to nested route when websiteId known
-  try {
-    return await unwrap(api.put(`/pages/${id}`, data));
-  } catch (e) {
-    if (websiteId) return updatePage(websiteId, id, data);
-    throw e;
-  }
+  if (!websiteId) throw new Error('update(page, data, websiteId) requires a websiteId');
+  return updatePage(websiteId, id, data);
 }
 
 export async function remove(id, websiteId) {
-  try {
-    return await unwrap(api.delete(`/pages/${id}`));
-  } catch (e) {
-    if (websiteId) return deletePage(websiteId, id);
-    throw e;
-  }
+  if (!websiteId) throw new Error('remove(page, websiteId) requires a websiteId');
+  return deletePage(websiteId, id);
 }
 
 export async function duplicate(id, websiteId) {
-  if (websiteId) return duplicatePage(websiteId, id);
-  try {
-    return await unwrap(api.post(`/pages/${id}/duplicate`));
-  } catch {
-    return duplicatePage(websiteId || 'unknown', id);
-  }
+  if (!websiteId) throw new Error('duplicate(page, websiteId) requires a websiteId');
+  return duplicatePage(websiteId, id);
 }
 
 const pageService = { getPages, getPage, createPage, updatePage, deletePage, duplicatePage, reorderPages, setHomePage, updatePageSlug, getVersions, createVersion, restoreVersion, getWebsite, updateWebsiteTheme, publishWebsite, idOf, listByWebsite, get, create, update, remove, duplicate };

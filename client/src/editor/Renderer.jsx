@@ -17,7 +17,12 @@ export function renderNode(node, ctx) {
 
   let el = null;
   switch (node.type) {
-    case 'root': el = <>{kids}</>; break;
+    // 'page' is the legacy root type written by older server seeds/content —
+    // treat it exactly like 'root' so published pages don't render blank.
+    case 'root':
+    case 'page':
+      el = <>{kids}</>;
+      break;
     case 'container': el = <Container {...common}>{kids}</Container>; break;
     case 'section': el = <Section {...common}>{kids}</Section>; break;
     case 'divider': el = <Divider {...common} />; break;
@@ -47,14 +52,14 @@ export function renderNode(node, ctx) {
   if (el == null) return null;
 
   // In edit mode every non-root node gets sortable + selection wrapper.
-  if (mode === 'edit' && node.type !== 'root') {
+  if (mode === 'edit' && node.type !== 'root' && node.type !== 'page') {
     return (
       <SortableItem key={node.id} node={node} selected={selectedId === node.id} onSelect={onSelect}>
         {el}
       </SortableItem>
     );
   }
-  if (node.type === 'root') return <React.Fragment key="root">{el}</React.Fragment>;
+  if (node.type === 'root' || node.type === 'page') return <React.Fragment key="root">{el}</React.Fragment>;
   return <React.Fragment key={node.id}>{el}</React.Fragment>;
 }
 

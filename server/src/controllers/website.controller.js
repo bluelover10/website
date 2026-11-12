@@ -9,6 +9,7 @@ const FormSubmission = require('../models/FormSubmission');
 const AnalyticsEvent = require('../models/AnalyticsEvent');
 const PublishVersion = require('../models/PublishVersion');
 const Media = require('../models/Media');
+const Template = require('../models/Template');
 const { slugify, generateUniqueSlug } = require('../utils/slugify');
 const { publishWebsite, unpublishWebsite } = require('../services/publish.service');
 
@@ -87,15 +88,105 @@ const getWebsite = asyncHandler(async (req, res) => {
   return sendSuccess(res, { website: { ...website, pageCount } }, 'Website fetched');
 });
 
+// Public: published site snapshot by slug (used by PublicSite renderer).
+const getPublishedSite = asyncHandler(async (req, res) => {
+  const website = await Website.findOne({ slug: req.params.slug }).lean();
+  if (!website || website.status !== 'published' || !website.publishedSnapshot) {
+    throw new ApiError(404, 'Site not found', 'SITE_NOT_FOUND');
+  }
+  const snapshot = website.publishedSnapshot;
+  return sendSuccess(
+    res,
+    {
+      website: {
+        _id: website._id,
+        name: website.name,
+        slug: website.slug,
+        description: website.description,
+        theme: snapshot.theme || website.theme,
+        navigation: snapshot.navigation || website.navigation,
+        seo: website.seo,
+        favicon: website.seo?.favicon || '',
+        status: website.status,
+        publishedAt: website.publishedAt,
+      },
+      pages: (snapshot.pages || []).map((p) => ({
+        _id: p.pageId,
+        title: p.title,
+        slug: p.slug,
+        path: p.path,
+        isHome: p.isHome,
+        seo: p.seo,
+        content: p.content,
+      })),
+    },
+    'Published site fetched'
+  );
+});
+
+// Create a website from a public template: POST /api/websites/from-template/:templateId
+const createFromTemplate = asyncHandler(async (req, res) => {
+  const template = await Template.findById(req.params.templateId);
+  if (!template || !template.isPublic) {
+    throw new ApiError(404, 'Template not found', 'TEMPLATE_NOT_FOUND');
+  }
+  const name = (req.body && req.body.name) || template.name;
+  const slug = await generateUniqueSlug(Website, name);
+  const website = await Website.create({
+    name,
+    slug,
+    description: template.description || '',
+    category: template.category,
+    owner: req.user.id,
+    status: 'draft',
+    theme: template.pages?.[0]?.theme || undefined,
+  });
+  await WebsiteMember.create({
+    websiteId: website._id,
+    userId: req.user.id,
+    role: 'owner',
+    invitedBy: req.user.id,
+  });
+  const tplPages = template.pages && template.pages.length
+    ? template.pages
+    : [{ title: 'Home', slug: 'home', content: { id: 'root', type: 'root', props: {}, children: [] } }];
+  let order = 0;
+  for (const tp of tplPages) {
+    // eslint-disable-next-line no-await-in-loop
+    await Page.create({
+      websiteId: website._id,
+      title: tp.title,
+      slug: tp.slug,
+      path: order === 0 ? '/' : `/${tp.slug}`,
+      isHome: order === 0,
+      order,
+      content: tp.content,
+    });
+    order += 1;
+  }
+  return sendSuccess(res, { website }, 'Website created from template', 201);
+});
+
 const updateWebsite = asyncHandler(async (req, res) => {
   const website = req.website;
-  const { name, description, category, customDomain } = req.body;
+  const { name, description, category, customDomain, slug, seo } = req.body;
   if (name !== undefined) website.name = name;
   if (description !== undefined) website.description = description;
   if (category !== undefined) website.category = category;
+  if (slug !== undefined && slug !== website.slug) {
+    const candidate = slugify(slug);
+    if (candidate && candidate !== website.slug) {
+      const clash = await Website.findOne({ slug: candidate, _id: { $ne: website._id } });
+      if (clash) throw new ApiError(409, 'Slug already in use by another site', 'SLUG_TAKEN');
+      website.slug = candidate;
+    }
+  }
   if (customDomain !== undefined) {
     website.customDomain = customDomain;
     website.domainVerified = false;
+  }
+  if (seo !== undefined) {
+    website.seo = { ...website.seo?.toObject?.() || website.seo || {}, ...seo };
   }
   await website.save();
   return sendSuccess(res, { website }, 'Website updated');
@@ -164,9 +255,17 @@ const unpublish = asyncHandler(async (req, res) => {
   return sendSuccess(res, { website }, 'Website unpublished');
 });
 
+// Accepts both flat payloads ({primary}) and wrapped payloads ({theme:{primary}}).
 const updateTheme = asyncHandler(async (req, res) => {
   const website = req.website;
-  website.theme = { ...website.theme.toObject(), ...req.body };
+  const patch = req.body?.theme && typeof req.body.theme === 'object' ? req.body.theme : req.body;
+  // Normalize client keys <-> model keys so both stay in sync.
+  if (patch.baseSize !== undefined && patch.baseFontSize === undefined) patch.baseFontSize = patch.baseSize;
+  if (patch.baseFontSize !== undefined && patch.baseSize === undefined) patch.baseSize = patch.baseFontSize;
+  if (patch.radius !== undefined && patch.borderRadius === undefined) patch.borderRadius = patch.radius;
+  if (patch.borderRadius !== undefined && patch.radius === undefined) patch.radius = patch.borderRadius;
+  const current = website.theme?.toObject?.() || website.theme || {};
+  website.theme = { ...current, ...patch };
   await website.save();
   return sendSuccess(res, { website }, 'Theme updated');
 });
@@ -178,9 +277,12 @@ const updateNavigation = asyncHandler(async (req, res) => {
   return sendSuccess(res, { website }, 'Navigation updated');
 });
 
+// Accepts both flat payloads ({title}) and wrapped payloads ({seo:{title}}).
 const updateSeo = asyncHandler(async (req, res) => {
   const website = req.website;
-  website.seo = { ...website.seo.toObject(), ...req.body };
+  const patch = req.body?.seo && typeof req.body.seo === 'object' ? req.body.seo : req.body;
+  const current = website.seo?.toObject?.() || website.seo || {};
+  website.seo = { ...current, ...patch };
   await website.save();
   return sendSuccess(res, { website }, 'SEO updated');
 });
@@ -195,7 +297,9 @@ const updateSettings = asyncHandler(async (req, res) => {
     website.customDomain = customDomain;
     website.domainVerified = false;
   }
-  if (seo !== undefined) website.seo = { ...website.seo.toObject(), ...seo };
+  if (seo !== undefined) {
+    website.seo = { ...website.seo?.toObject?.() || website.seo || {}, ...seo };
+  }
   await website.save();
   return sendSuccess(res, { website }, 'Settings updated');
 });
@@ -204,6 +308,8 @@ module.exports = {
   listWebsites,
   createWebsite,
   getWebsite,
+  getPublishedSite,
+  createFromTemplate,
   updateWebsite,
   deleteWebsite,
   duplicateWebsite,

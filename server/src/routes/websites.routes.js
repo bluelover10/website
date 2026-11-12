@@ -20,6 +20,15 @@ const analyticsRouter = require('./analytics.routes');
 
 const router = express.Router();
 
+// ---- Public routes (no auth) — must be registered before authed routes ----
+// Published site snapshot for the public renderer: /api/websites/slug/:slug
+router.get('/slug/:slug', websiteController.getPublishedSite);
+// Backwards-compatible alias: /api/websites/published/:slug
+router.get('/published/:slug', websiteController.getPublishedSite);
+
+// Create a website from a public template (templateId in path).
+router.post('/from-template/:templateId', protect, websiteController.createFromTemplate);
+
 // Nested resources (must be registered before /:websiteId routes that could clash —
 // express matches in order, but /:websiteId/pages is distinct from /:websiteId so order is safe)
 router.use('/:websiteId/pages', pagesRouter);

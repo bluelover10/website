@@ -20,9 +20,9 @@ function CanvasBody({ website, pages, theme }) {
   const isEmpty = !tree?.children || tree.children.length === 0;
 
   return (
-    <div className="flex-1 overflow-auto bg-slate-200/70 p-6" onClick={() => select(null)}>
-      <div className="mx-auto transition-all" style={{ maxWidth: WIDTHS[viewport] || '100%' }}>
-        <div className="mb-2 flex items-center justify-between text-[11px] uppercase tracking-wide text-slate-500">
+    <div className="sf-canvas sf-canvas-grid flex-1 overflow-auto p-6" onClick={() => select(null)}>
+      <div className="mx-auto transition-all duration-300 ease-swift" style={{ maxWidth: WIDTHS[viewport] || '100%' }}>
+        <div className="mb-2 flex items-center justify-between text-2xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
           <span>{viewport} · {WIDTHS[viewport]}</span>
           <span>{(tree?.children || []).length} blocks</span>
         </div>
@@ -30,20 +30,22 @@ function CanvasBody({ website, pages, theme }) {
           <div
             ref={setNodeRef}
             onClick={(e) => e.stopPropagation()}
-            className={`bg-white rounded-lg shadow-sm min-h-[600px] overflow-hidden transition ${isOver ? 'ring-2 ring-indigo-500' : ''}`}
+            className={`min-h-[600px] overflow-hidden rounded-2xl bg-white shadow-card ring-1 ring-black/[0.03] transition-all duration-200 dark:bg-surface-inv2 ${isOver ? 'ring-2 ring-primary-500 shadow-glow' : ''}`}
           >
             {isEmpty ? (
-              <div className="flex flex-col items-center justify-center py-32 text-center px-8">
-                <div className="w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-500 mb-3">
-                  <MousePointerClick size={22} />
+              <div className="flex flex-col items-center justify-center px-8 py-32 text-center">
+                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-100 to-primary-50 text-primary-500 dark:from-primary-900/40 dark:to-primary-950/40 dark:text-primary-300">
+                  <MousePointerClick size={24} />
                 </div>
-                <p className="font-semibold text-slate-700">Start building</p>
-                <p className="text-sm text-slate-500 mt-1 max-w-sm">Drag components from the left panel, or click a component to add it here. Sections and containers accept nested blocks.</p>
+                <p className="font-display text-base font-bold text-slate-700 dark:text-slate-200">Start building</p>
+                <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-slate-500 dark:text-slate-400">
+                  Drag components from the left panel, or click one to add it here. Sections and containers accept nested blocks.
+                </p>
               </div>
             ) : (
               <Renderer tree={tree} mode="edit" theme={theme} website={website} pages={pages} onSelect={select} selectedId={selectedId} />
             )}
-            {isOver && !isEmpty && <div className="h-1 bg-indigo-500 rounded-full mx-4 my-2" />}
+            {isOver && !isEmpty && <div className="mx-4 my-2 h-1 rounded-full bg-primary-500" />}
           </div>
         </SortableContext>
       </div>

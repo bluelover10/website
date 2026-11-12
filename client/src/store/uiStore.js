@@ -1,10 +1,13 @@
 import { create } from 'zustand';
 import { createId } from '../utils/ids.js';
 
+let confirmResolver = null;
+
 export const useUiStore = create((set, get) => ({
   toasts: [],
   modals: {},
   sidebarOpen: true,
+  mobileNavOpen: false,
   darkMode: false,
   confirmDialog: null,
 
@@ -23,6 +26,9 @@ export const useUiStore = create((set, get) => ({
 
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
   clearToasts: () => set({ toasts: [] }),
+
+  toggleMobileNav: () => set((s) => ({ mobileNavOpen: !s.mobileNavOpen })),
+  setMobileNav: (open) => set({ mobileNavOpen: Boolean(open) }),
 
   openModal: (name, props = {}) =>
     set((s) => ({ modals: { ...s.modals, [name]: { open: true, props } } })),
@@ -55,19 +61,30 @@ export const useUiStore = create((set, get) => ({
     }
   },
 
+  // Promise-based confirm. Resolves true only when the confirm button is used;
+  // resolves false for cancel/dismiss. Legacy onConfirm callbacks still work.
   askConfirm: (opts) =>
-    set({
-      confirmDialog: {
-        id: createId('confirm'),
-        title: 'Are you sure?',
-        message: '',
-        confirmLabel: 'Confirm',
-        cancelLabel: 'Cancel',
-        danger: false,
-        ...opts,
-      },
+    new Promise((resolve) => {
+      confirmResolver = resolve;
+      set({
+        confirmDialog: {
+          id: createId('confirm'),
+          title: 'Are you sure?',
+          message: '',
+          confirmLabel: 'Confirm',
+          cancelLabel: 'Cancel',
+          danger: false,
+          ...opts,
+        },
+      });
     }),
-  closeConfirm: () => set({ confirmDialog: null }),
+  closeConfirm: (result = false) => {
+    if (confirmResolver) {
+      confirmResolver(result === true);
+      confirmResolver = null;
+    }
+    set({ confirmDialog: null });
+  },
 }));
 
 export default useUiStore;

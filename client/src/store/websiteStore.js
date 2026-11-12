@@ -2,6 +2,9 @@ import { create } from 'zustand';
 import websiteService from '../services/website.service.js';
 import publishService from '../services/publish.service.js';
 
+// Server responses wrap websites as { website } — unwrap once, consistently.
+const unwrapSite = (res) => res?.website ?? res;
+
 export const useWebsiteStore = create((set, get) => ({
   websites: [],
   currentWebsite: null,
@@ -27,7 +30,7 @@ export const useWebsiteStore = create((set, get) => ({
   fetchWebsite: async (id) => {
     set({ loading: true, error: null });
     try {
-      const site = await websiteService.get(id);
+      const site = unwrapSite(await websiteService.get(id));
       set({ currentWebsite: site, loading: false });
       // keep list in sync
       const { websites } = get();
@@ -47,9 +50,9 @@ export const useWebsiteStore = create((set, get) => ({
       let site;
       if (payload?.templateId) {
         const { templateId, ...rest } = payload;
-        site = await websiteService.createFromTemplate(templateId, rest);
+        site = unwrapSite(await websiteService.createFromTemplate(templateId, rest));
       } else {
-        site = await websiteService.create(payload);
+        site = unwrapSite(await websiteService.create(payload));
       }
       set((s) => ({ websites: [site, ...s.websites], currentWebsite: site, saving: false }));
       return site;
@@ -62,7 +65,7 @@ export const useWebsiteStore = create((set, get) => ({
   updateWebsite: async (id, payload) => {
     set({ saving: true });
     try {
-      const updated = await websiteService.update(id, payload);
+      const updated = unwrapSite(await websiteService.update(id, payload));
       set((s) => ({
         websites: s.websites.map((w) => (String(w._id || w.id) === String(id) ? updated : w)),
         currentWebsite:
@@ -97,7 +100,7 @@ export const useWebsiteStore = create((set, get) => ({
 
   duplicateWebsite: async (id) => {
     try {
-      const copy = await websiteService.duplicate(id);
+      const copy = unwrapSite(await websiteService.duplicate(id));
       set((s) => ({ websites: [copy, ...s.websites] }));
       return copy;
     } catch (e) {

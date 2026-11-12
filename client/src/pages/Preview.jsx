@@ -66,26 +66,43 @@ export default function Preview() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-200 flex flex-col">
-      <div className="h-11 bg-white border-b flex items-center gap-2 px-3 sticky top-0 z-40">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">Preview · draft</span>
-        <span className="text-xs text-slate-500 truncate">{website?.name || ''}</span>
-        <div className="mx-auto flex items-center gap-0.5 border rounded-lg px-1 py-0.5">
+    <div className="flex min-h-screen flex-col bg-surface-2 dark:bg-surface-inv1">
+      <div className="glass sticky top-0 z-40 flex h-12 flex-wrap items-center gap-2 border-b border-slate-200/80 px-3 dark:border-slate-800">
+        <span className="rounded-md border border-accent-200 bg-accent-50 px-2 py-0.5 text-2xs font-bold uppercase tracking-wider text-accent-700 dark:border-accent-800/60 dark:bg-accent-900/30 dark:text-accent-300">
+          Preview · draft
+        </span>
+        <span className="truncate text-xs font-medium text-slate-600 dark:text-slate-300">{website?.name || ''}</span>
+        <div className="mx-auto flex items-center gap-0.5 rounded-lg border border-slate-200 bg-white p-0.5 shadow-xs dark:border-slate-800 dark:bg-slate-900" role="group" aria-label="Viewport">
           {[{ v: 'desktop', I: Monitor }, { v: 'tablet', I: Tablet }, { v: 'mobile', I: Smartphone }].map(({ v, I }) => (
-            <button key={v} onClick={() => setVp(v)} className={`p-1.5 rounded ${vp === v ? 'bg-indigo-100 text-indigo-700' : 'text-slate-500 hover:bg-slate-100'}`}><I size={15} /></button>
+            <button
+              key={v}
+              onClick={() => setVp(v)}
+              aria-pressed={vp === v}
+              className={`rounded-md p-1.5 transition-all duration-200 ${vp === v ? 'bg-primary-600 text-white shadow-xs' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+            >
+              <I size={14} />
+            </button>
           ))}
         </div>
         {pages.length > 1 && (
-          <select className="text-xs border rounded px-1.5 py-1" value={pageId || ''} onChange={(e) => switchPage(e.target.value)}>
+          <select
+            className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs shadow-xs dark:border-slate-800 dark:bg-slate-900"
+            value={pageId || ''}
+            onChange={(e) => switchPage(e.target.value)}
+            aria-label="Switch page"
+          >
             {pages.map((p) => <option key={p._id || p.id} value={p._id || p.id}>{p.title}</option>)}
           </select>
         )}
-        <Link to={`/websites/${websiteId}/edit`} className="flex items-center gap-1 text-xs font-medium border rounded-md px-2.5 py-1.5 hover:bg-slate-50">
+        <Link
+          to={`/websites/${websiteId}/edit`}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-primary-300 hover:bg-primary-50/50 dark:border-slate-700 dark:text-slate-200 dark:hover:border-primary-700 dark:hover:bg-primary-950/40"
+        >
           <Pencil size={13} /> Back to editor
         </Link>
       </div>
-      <div className="flex-1 overflow-auto p-4">
-        <div className="mx-auto bg-white rounded-lg shadow-sm overflow-hidden transition-all" style={{ maxWidth: WIDTHS[vp] }}>
+      <div className="flex-1 overflow-auto p-4 sf-canvas sf-canvas-grid">
+        <div className="mx-auto overflow-hidden rounded-xl bg-white shadow-card ring-1 ring-black/[0.03] transition-all duration-300 ease-swift dark:bg-surface-inv2" style={{ maxWidth: WIDTHS[vp] }}>
           <Renderer tree={tree} mode="preview" theme={theme} website={website} pages={pages} navigate={(slug) => { const pg = pages.find((p) => p.slug === slug); if (pg) switchPage(pg._id || pg.id); }} />
         </div>
       </div>

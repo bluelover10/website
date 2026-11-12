@@ -1,8 +1,15 @@
 import { cn } from '../utils/cn.js';
 
-export function Card({ className, children, ...props }) {
+export function Card({ className, hoverable, children, ...props }) {
   return (
-    <div className={cn('sf-card p-5', className)} {...props}>
+    <div
+      className={cn(
+        'sf-card p-5',
+        hoverable && 'hover:-translate-y-0.5 hover:shadow-pop',
+        className
+      )}
+      {...props}
+    >
       {children}
     </div>
   );
@@ -13,7 +20,7 @@ export function CardHeader({ className, children }) {
 }
 
 export function CardTitle({ className, children }) {
-  return <h3 className={cn('text-base font-semibold', className)}>{children}</h3>;
+  return <h3 className={cn('font-display text-base font-bold', className)}>{children}</h3>;
 }
 
 export default Card;

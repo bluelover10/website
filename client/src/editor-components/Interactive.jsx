@@ -35,8 +35,9 @@ export function ContactForm({ node, website }) {
     if (!websiteId) { setStatus('error'); return; }
     setStatus('sending');
     try {
-      // POST /api/forms/:websiteId/submit (formService.submit targets /forms/:id/submit)
-      await formService.submit(websiteId, { pageId: undefined, data: form });
+      // POST /api/websites/:websiteId/forms/submit — formId is required by the
+      // server validator; the default matches DEFAULT_PROPS.contactForm.formId.
+      await formService.submit(websiteId, { formId: p.formId || 'contact', data: form });
       setStatus('sent');
       setForm({ name: '', email: '', message: '' });
     } catch {

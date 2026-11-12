@@ -5,33 +5,36 @@ import { findNode } from '../editor/EditorUtils';
 
 function Row({ label, children }) {
   return (
-    <label className="block mb-2.5">
-      <span className="block text-[11px] font-medium text-slate-500 mb-1">{label}</span>
+    <label className="mb-3 block">
+      <span className="mb-1 block text-2xs font-semibold text-slate-500 dark:text-slate-400">{label}</span>
       {children}
     </label>
   );
 }
-const ti = 'w-full border rounded-md px-2 py-1.5 text-xs';
+const ti = 'w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 shadow-xs transition focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100';
 
 function TextInput({ value, onChange, placeholder }) {
   return <input className={ti} value={value ?? ''} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />;
 }
 function TextArea({ value, onChange, rows = 3 }) {
-  return <textarea className={ti} rows={rows} value={value ?? ''} onChange={(e) => onChange(e.target.value)} />;
+  return <textarea className={`${ti} resize-y font-mono leading-relaxed`} rows={rows} value={value ?? ''} onChange={(e) => onChange(e.target.value)} />;
 }
 function ColorInput({ value, onChange }) {
   return (
     <div className="flex items-center gap-2">
-      <input type="color" value={/^#[0-9a-fA-F]{6}$/.test(value || '') ? value : '#4f46e5'} onChange={(e) => onChange(e.target.value)} className="w-8 h-8 rounded border cursor-pointer p-0.5" />
-      <input className={ti} value={value ?? ''} onChange={(e) => onChange(e.target.value)} placeholder="#000000" />
+      <label className="relative h-7 w-9 shrink-0 cursor-pointer overflow-hidden rounded-md border border-slate-200 dark:border-slate-700" aria-label="Pick color">
+        <span className="absolute inset-1 rounded" style={{ background: value || '#5b4fd6' }} />
+        <input type="color" value={/^#[0-9a-fA-F]{6}$/.test(value || '') ? value : '#5b4fd6'} onChange={(e) => onChange(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" />
+      </label>
+      <input className={`${ti} font-mono`} value={value ?? ''} onChange={(e) => onChange(e.target.value)} placeholder="#000000" />
     </div>
   );
 }
 function RangeInput({ value, min = 0, max = 200, onChange }) {
   return (
     <div className="flex items-center gap-2">
-      <input type="range" min={min} max={max} value={Number(value) || 0} onChange={(e) => onChange(Number(e.target.value))} className="flex-1" />
-      <input type="number" className="w-16 border rounded-md px-1.5 py-1 text-xs" value={Number(value) || 0} onChange={(e) => onChange(Number(e.target.value))} />
+      <input type="range" min={min} max={max} value={Number(value) || 0} onChange={(e) => onChange(Number(e.target.value))} className="flex-1 accent-[#5b4fd6]" />
+      <input type="number" className="w-16 rounded-md border border-slate-200 px-1.5 py-1 text-xs tabular-nums dark:border-slate-700 dark:bg-slate-900" value={Number(value) || 0} onChange={(e) => onChange(Number(e.target.value))} />
     </div>
   );
 }
@@ -50,7 +53,16 @@ export default function RightPanel() {
   const node = selectedId ? findNode(tree, selectedId) : null;
 
   if (!node) {
-    return <div className="p-4 text-xs text-slate-500">Select a block on the canvas to edit its properties. Drag new blocks from the left panel.</div>;
+    return (
+      <div className="flex h-full flex-col items-center justify-center p-6 text-center">
+        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-100 to-primary-50 text-primary-400 dark:from-primary-900/40 dark:to-primary-950/40">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M4 4h7v7H4zM13 13h7v7h-7z" strokeLinecap="round" /></svg>
+        </div>
+        <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+          Select a block on the canvas to edit its properties. Drag new blocks from the left panel.
+        </p>
+      </div>
+    );
   }
   const p = node.props || {};
   const set = (patch) => updateNode(node.id, patch);
@@ -61,10 +73,10 @@ export default function RightPanel() {
   };
 
   return (
-    <div className="p-3 overflow-auto h-full">
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-bold uppercase tracking-wide text-slate-500">{node.type}</span>
-        <span className="font-mono text-[10px] text-slate-300">{node.id.slice(-6)}</span>
+    <div className="h-full overflow-auto p-3">
+      <div className="mb-3 flex items-center justify-between border-b border-slate-100 pb-2 dark:border-slate-800">
+        <span className="rounded-md bg-primary-100 px-2 py-0.5 text-2xs font-bold uppercase tracking-wider text-primary-700 dark:bg-primary-900/40 dark:text-primary-200">{node.type}</span>
+        <span className="font-mono text-2xs text-slate-300 dark:text-slate-600">{node.id.slice(-6)}</span>
       </div>
 
       {(node.type === 'heading' || node.type === 'text' || node.type === 'link' || node.type === 'button') && (

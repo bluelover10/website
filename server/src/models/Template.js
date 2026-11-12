@@ -18,6 +18,7 @@ const templateSchema = new mongoose.Schema(
     thumbnail: { type: String, default: '' },
     pages: { type: [templatePageSchema], default: [] },
     isPublic: { type: Boolean, default: true, index: true },
+    seedVersion: { type: Number, default: 1, index: true },
   },
   { timestamps: true }
 );

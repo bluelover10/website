@@ -16,8 +16,8 @@ const mediaService = {
     });
     return data?.data ?? data;
   },
-  async remove(id) {
-    const { data } = await api.delete(`/media/${id}`);
+  async remove(id, websiteId) {
+    const { data } = await api.delete(`/media/${id}`, { params: websiteId ? { websiteId } : {} });
     return data?.data ?? data;
   },
 };

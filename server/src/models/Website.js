@@ -19,18 +19,24 @@ const websiteSchema = new mongoose.Schema(
     category: { type: String, default: 'general', index: true },
     owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     status: { type: String, enum: ['draft', 'published'], default: 'draft', index: true },
+    // Theme is a design-token bag whose canonical shape is defined by the
+    // client renderer (see client/src/utils/componentDefaults + ThemePanel).
+    // Zod (updateThemeSchema) validates the patch; the model stays flexible.
     theme: {
-      primary: { type: String, default: '#4f46e5' },
-      secondary: { type: String, default: '#0ea5e9' },
-      background: { type: String, default: '#ffffff' },
-      text: { type: String, default: '#111827' },
-      accent: { type: String, default: '#f59e0b' },
-      headingFont: { type: String, default: 'Inter' },
-      bodyFont: { type: String, default: 'Inter' },
-      baseFontSize: { type: Number, default: 16 },
-      containerWidth: { type: Number, default: 1200 },
-      borderRadius: { type: Number, default: 8 },
-      buttonStyle: { type: String, enum: ['rounded', 'pill', 'square'], default: 'rounded' },
+      type: mongoose.Schema.Types.Mixed,
+      default: {
+        primary: '#4f46e5',
+        secondary: '#0ea5e9',
+        background: '#ffffff',
+        text: '#111827',
+        accent: '#f59e0b',
+        headingFont: 'Inter',
+        bodyFont: 'Inter',
+        baseSize: 16,
+        containerWidth: 1200,
+        radius: 8,
+        buttonStyle: 'solid',
+      },
     },
     navigation: { type: [navigationItemSchema], default: [] },
     seo: {

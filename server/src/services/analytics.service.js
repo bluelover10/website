@@ -23,7 +23,12 @@ async function getSummary(websiteId, { from, to } = {}) {
     if (from) match.createdAt.$gte = new Date(from);
     if (to) match.createdAt.$lte = new Date(to);
   }
-  const [totals, byPage, byDay] = await Promise.all([
+  const now = Date.now();
+  const windowMatch = (ms) => ({
+    websiteId: new mongoose.Types.ObjectId(websiteId),
+    createdAt: { $gte: new Date(now - ms) },
+  });
+  const [totals, byPage, byDay, todayAgg, weekAgg, monthAgg] = await Promise.all([
     AnalyticsEvent.aggregate([
       { $match: match },
       {
@@ -64,10 +69,17 @@ async function getSummary(websiteId, { from, to } = {}) {
       { $limit: 60 },
       { $project: { _id: 0, date: '$_id', views: 1 } },
     ]),
+    // Rolling windows for dashboard cards
+    AnalyticsEvent.countDocuments(windowMatch(24 * 3600 * 1000)),
+    AnalyticsEvent.countDocuments(windowMatch(7 * 24 * 3600 * 1000)),
+    AnalyticsEvent.countDocuments(windowMatch(30 * 24 * 3600 * 1000)),
   ]);
   return {
     views: totals[0]?.views || 0,
     uniqueVisitors: totals[0]?.uniqueVisitors || 0,
+    today: todayAgg,
+    week: weekAgg,
+    month: monthAgg,
     byPage,
     byDay,
   };

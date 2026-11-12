@@ -14,7 +14,8 @@ const authService = {
     return data?.data ?? data;
   },
   async updateProfile(payload) {
-    const { data } = await api.put('/auth/profile', payload);
+    // Server: PATCH /api/auth/me (updateMeSchema: {name?, avatar?})
+    const { data } = await api.patch('/auth/me', payload);
     return data?.data ?? data;
   },
   async logout() {

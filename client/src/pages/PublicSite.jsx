@@ -6,23 +6,13 @@ import { useParams, useSearchParams, useNavigate, Link } from 'react-router-dom'
 import websiteService from '../services/website.service';
 import analyticsService from '../services/analytics.service';
 import { Renderer } from '../editor/Renderer';
+import { Globe } from 'lucide-react';
 
+// Published content via GET /api/websites/slug/:slug (the only public route).
 async function fetchPublished(slug) {
-  try {
-    const res = await websiteService.getBySlug(slug);
-    if (res) return res;
-  } catch { /* fall through */ }
-  const tries = [`/api/publish/${slug}`, `/api/websites/published/${slug}`, `/api/sites/${slug}`];
-  let lastErr = null;
-  for (const t of tries) {
-    try {
-      const res = await fetch(t);
-      if (!res.ok) { lastErr = new Error(`HTTP ${res.status}`); continue; }
-      const data = await res.json();
-      return data?.data ?? data;
-    } catch (e) { lastErr = e; }
-  }
-  throw lastErr || new Error('Site not found');
+  const res = await websiteService.getBySlug(slug);
+  if (!res) throw new Error('Site not found');
+  return res;
 }
 
 function toRoot(content) {
@@ -105,19 +95,34 @@ export default function PublicSite() {
   };
 
   if (status === 'loading') {
-    return <div className="min-h-screen flex items-center justify-center text-sm text-slate-500"><span className="animate-pulse">Loading site…</span></div>;
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="flex items-center gap-2.5 text-sm text-slate-500">
+          <span className="h-2 w-2 animate-pulse-soft rounded-full bg-primary-500" />
+          Loading site…
+        </div>
+      </div>
+    );
   }
   if (status === '404' || (status === 'ready' && !page && !site?.content)) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-2 text-center px-6">
-        <div className="text-5xl font-extrabold text-slate-200">404</div>
-        <p className="text-slate-600 font-medium">This site or page could not be found.</p>
-        <Link to="/" className="text-sm text-indigo-600 hover:underline">Go home</Link>
+      <div className="sf-hero-gradient flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-card">
+          <Globe size={24} className="text-primary-500" />
+        </div>
+        <div className="font-display text-5xl font-bold tracking-tight text-gradient">404</div>
+        <p className="font-medium text-slate-600">This site or page could not be found.</p>
+        <Link to="/" className="sf-link text-sm">Go home</Link>
       </div>
     );
   }
   if (status === 'error') {
-    return <div className="min-h-screen flex items-center justify-center text-sm text-red-600">Something went wrong loading this site.</div>;
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
+        <p className="text-sm font-medium text-red-600">Something went wrong loading this site.</p>
+        <button onClick={() => window.location.reload()} className="sf-link text-sm">Try again</button>
+      </div>
+    );
   }
 
   const raw = page?.content || site?.content || { id: 'root', type: 'root', props: {}, children: [] };

@@ -86,29 +86,56 @@ export default function Editor() {
 
   const activePage = (pages || []).find((p) => (p._id || p.id) === activePageId);
 
-  if (loading) return <div className="flex h-full items-center justify-center text-sm text-slate-500">Loading editor…</div>;
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="flex items-center gap-2.5 text-sm text-slate-500 dark:text-slate-400">
+          <span className="h-2 w-2 animate-pulse-soft rounded-full bg-primary-500" />
+          Loading editor…
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full min-h-0" onClick={() => useEditorStore.getState().select(null)}>
       {/* left rail */}
-      <aside className="flex w-72 shrink-0 flex-col border-r bg-white dark:bg-slate-900 dark:border-slate-800 min-h-0" onClick={(e) => e.stopPropagation()}>
-        <div className="flex border-b dark:border-slate-800 shrink-0">
-          {TABS.map((t) => (
-            <button key={t.id} onClick={() => setTab(t.id)} title={t.label}
-              className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-medium ${tab === t.id ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>
-              <t.icon size={15} />{t.label}
-            </button>
-          ))}
+      <aside
+        className="flex w-72 min-h-0 shrink-0 flex-col border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-surface-inv2"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex shrink-0 gap-1 border-b border-slate-200 p-1.5 dark:border-slate-800" role="tablist" aria-label="Editor panels">
+          {TABS.map((t) => {
+            const active = tab === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                title={t.label}
+                role="tab"
+                aria-selected={active}
+                className={`flex flex-1 flex-col items-center gap-1 rounded-lg py-2 text-2xs font-semibold transition-all duration-200 ${
+                  active
+                    ? 'bg-primary-50 text-primary-700 shadow-xs dark:bg-primary-950/50 dark:text-primary-200'
+                    : 'text-slate-400 hover:bg-slate-50 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                <t.icon size={15} className={active ? 'text-primary-600 dark:text-primary-300' : ''} />
+                {t.label}
+              </button>
+            );
+          })}
         </div>
-        <div className="flex-1 min-h-0">
+        <div className="min-h-0 flex-1">
           {tab === 'components' && <LeftPanel />}
           {tab === 'pages' && <PagesPanel websiteId={websiteId} />}
           {tab === 'theme' && <ThemePanel websiteId={websiteId} theme={theme} />}
-          {tab === 'versions' && <VersionsPanel pageId={activePageId} />}
+          {tab === 'versions' && <VersionsPanel websiteId={websiteId} pageId={activePageId} />}
         </div>
         {activePage && (
-          <div className="px-3 py-1.5 border-t dark:border-slate-800 text-[11px] text-slate-500 truncate">
-            Editing: <b>{activePage.title}</b> <span className="font-mono">/{activePage.slug}</span>
+          <div className="truncate border-t border-slate-100 px-3 py-2 text-2xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+            Editing: <b className="font-semibold text-slate-700 dark:text-slate-200">{activePage.title}</b>{' '}
+            <span className="font-mono text-slate-400">/{activePage.slug}</span>
           </div>
         )}
       </aside>
@@ -119,9 +146,12 @@ export default function Editor() {
       </div>
 
       {/* right inspector */}
-      <aside className="hidden w-72 shrink-0 flex-col border-l bg-white dark:bg-slate-900 dark:border-slate-800 min-h-0 lg:flex" onClick={(e) => e.stopPropagation()}>
-        <div className="px-3 py-2 border-b dark:border-slate-800 text-[10px] font-bold uppercase tracking-wider text-slate-400">Properties</div>
-        <div className="flex-1 min-h-0"><RightPanel /></div>
+      <aside
+        className="hidden w-72 min-h-0 shrink-0 flex-col border-l border-slate-200 bg-white lg:flex dark:border-slate-800 dark:bg-surface-inv2"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="border-b border-slate-100 px-3 py-2.5 text-2xs font-bold uppercase tracking-wider text-slate-400 dark:border-slate-800">Properties</div>
+        <div className="min-h-0 flex-1"><RightPanel /></div>
       </aside>
     </div>
   );

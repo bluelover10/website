@@ -4,6 +4,7 @@ const { requireWebsiteRole } = require('../middleware/authorize');
 const validate = require('../middleware/validate');
 const { submitFormSchema } = require('../validators/form.validator');
 const formController = require('../controllers/form.controller');
+const FormSubmission = require('../models/FormSubmission');
 
 const router = express.Router({ mergeParams: true });
 
@@ -15,10 +16,21 @@ router.post('/:websiteId/submit', validate(submitFormSchema), formController.sub
 // Owner/editor listing (nested or top-level with :websiteId param)
 router.get('/', protect, requireWebsiteRole(['owner', 'editor']), formController.listSubmissions);
 router.get('/:websiteId', protect, requireWebsiteRole(['owner', 'editor']), formController.listSubmissions);
-router.delete('/:submissionId', protect, requireWebsiteRole(['owner', 'editor']), formController.deleteSubmission);
-router.delete('/:websiteId/:submissionId', protect, requireWebsiteRole(['owner', 'editor']), async (req, res, next) => {
-  req.params.submissionId = req.params.submissionId;
-  return formController.deleteSubmission(req, res, next);
-});
+
+// Standalone delete by submission id: resolve the owning website from the
+// submission document itself, then run the normal role check.
+router.delete('/:submissionId', protect, async (req, res, next) => {
+  if (!req.params.websiteId) {
+    try {
+      const submission = await FormSubmission.findById(req.params.submissionId).select('websiteId').lean();
+      if (submission) req.params.websiteId = String(submission.websiteId);
+    } catch {
+      // fall through — role check/controller produce the proper error
+    }
+  }
+  return next();
+}, requireWebsiteRole(['owner', 'editor']), formController.deleteSubmission);
+
+router.delete('/:websiteId/:submissionId', protect, requireWebsiteRole(['owner', 'editor']), formController.deleteSubmission);
 
 module.exports = router;

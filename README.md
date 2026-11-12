@@ -2,6 +2,17 @@
 
 A portfolio-quality MERN MVP in the spirit of Wix / Webflow / landing-page builders: create sites, pick a template or start blank, drag-and-drop components on a canvas, edit styles, manage pages + navigation + theme + media + SEO, autosave with version history + undo/redo, preview responsively, publish to a public URL, collect form submissions and view basic analytics — with Owner / Editor / Viewer RBAC enforced on the backend.
 
+## Demo account
+
+On first boot the server seeds a **public demo account** so visitors can explore without registering. The credentials are intentionally public — they are rendered **only on the login page** (`client/src/components/DemoAccessPanel.jsx`, values from `client/src/config/demo.js`, mirrored in `server/src/services/seed.service.js`):
+
+```
+Email:    demo@siteforge.app
+Password: demo1234
+```
+
+The login page shows copy buttons and a **“Use Demo Account”** button that fills the form. The demo user owns a published demo site (“Nova Creative Studio”) with seeded form submissions and 14 days of analytics events. The account has no admin powers — it is a regular `owner` of that single demo site. Never place real credentials in `config/demo.js`; it is public by design.
+
 ## Features
 
 **Auth & teams**
@@ -56,7 +67,7 @@ Website builder/
       components/          # Button, Card, Input, Modal, Toast, EmptyState...
       editor/              # Renderer, EditorCanvas, SortableItem, DndContext, EditorUtils, ComponentLibrary
       editor-components/   # Layout, Typography, Media, Interactive, Sections (21 types)
-      panels/              # Left, Right, TopBar, Pages, Theme, Versions
+      panels/              # Left, Right, Pages, Theme, Versions
       pages/               # Landing, Login, Register, Dashboard, Websites, CreateWebsite,
                            # Templates, Editor, Preview, PublicSite, MediaLibrary,
                            # SiteSettings, Submissions, Team, Analytics, NotFound
@@ -164,14 +175,14 @@ UPLOAD_DIR=uploads
 ## Running locally
 
 ```powershell
-# terminal 1 — backend :5000 (seeds 5 templates on first boot)
+# terminal 1 — backend :5000 (seeds templates + demo account/demo site on first boot)
 npm run dev:server
 
 # terminal 2 — frontend :5173
 npm run dev:client
 ```
 
-Open http://localhost:5173 → Register → Create Website → Edit → Publish → open `/site/<slug>`.
+Open http://localhost:5173 → log in with the demo account (button on the login page) or Register → Create Website → Edit → Publish → open `/site/<slug>`.
 
 Health: `GET http://localhost:5000/healthz` and `GET http://localhost:5000/api/health`.
 
@@ -191,7 +202,7 @@ Services: `frontend` (Vite build + nginx), `backend` (Node + uploads volume), `m
 1. `POST /api/websites/:id/publish` (owner only) validates ≥1 page.
 2. Loads all `Page` docs → deep-clones `{title, slug, path, content}` + `website.theme/navigation/seo`.
 3. Writes `Website.publishedSnapshot + status=published + publishedAt` and appends `PublishVersion{versionNumber, pagesSnapshot}`.
-4. Public `GET /api/websites/published/:slug` (or `/api/publish/:slug` alias) returns snapshot only. `PublicSite.jsx` renders it and fires `POST /api/analytics/track`.
+4. Public `GET /api/websites/slug/:slug` returns the published snapshot only (drafts 404). `PublicSite.jsx` renders it and fires `POST /api/analytics/track`.
 
 Unpublish: `POST /websites/:id/unpublish` flips to `draft` (snapshot retained for republish audit).
 
@@ -201,15 +212,16 @@ Custom domains: `Website{customDomain, domainVerified}` reserved; future: map `H
 
 All JSON is `{success:true,data}` or `{success:false,message,errorCode}`.
 
-- Auth: `POST /api/auth/register|login`, `GET /api/auth/me`
-- Websites: `GET|POST /api/websites`, `GET|PUT|DELETE /api/websites/:id`, `POST /:id/duplicate|publish|unpublish`, `PUT /:id/theme|navigation|seo`
-- Pages: `GET|POST /api/websites/:id/pages`, `GET|PUT|DELETE /api/pages/:pageId` (or nested), `POST /:pageId/duplicate`, `PUT /reorder`, `PUT /:pageId/set-home`
-- Versions: `GET /api/pages/:pageId/versions`, `POST /snapshot`, `POST /:versionId/restore`
-- Templates: `GET /api/templates`, `POST /api/websites/from-template`
-- Media: `POST /api/media (multipart)`, `GET /api/media?websiteId=`, `DELETE /api/media/:id`
-- Forms: `POST /api/forms/:websiteId/submit` (public), `GET /api/websites/:id/submissions` (owner)
-- Analytics: `POST /api/analytics/track` (public), `GET /api/analytics/:websiteId/summary`
-- Members: `GET|POST /api/websites/:id/members`, `PUT|DELETE /api/members/:memberId`
+- Auth: `POST /api/auth/register|login`, `GET /api/auth/me`, `PATCH /api/auth/me` (profile)
+- Websites: `GET|POST /api/websites`, `GET|PUT|DELETE /api/websites/:id`, `POST /:id/duplicate|publish|unpublish`, `PUT /:id/theme|navigation|seo|settings`
+- Public site: `GET /api/websites/slug/:slug` (published only, no auth) — powers `/site/:slug`
+- Templates: `GET /api/templates`, `POST /api/websites/from-template/:templateId`
+- Pages: `GET|POST /api/websites/:id/pages`, `POST /api/websites/:id/pages/reorder`, `GET|PUT|DELETE /api/websites/:id/pages/:pageId`, `POST /:pageId/duplicate|set-home`
+- Versions: `GET /api/websites/:id/pages/:pageId/versions`, `POST .../versions/snapshot`, `POST .../versions/:versionNumber/restore`
+- Media: `POST /api/media` (multipart), `GET /api/media?websiteId=`, `DELETE /api/media/:id?websiteId=`
+- Forms: `POST /api/websites/:id/forms/submit` (public, alias `POST /api/forms/:websiteId/submit`), `GET /api/websites/:id/forms` (owner/editor), `DELETE /api/websites/:id/forms/:submissionId` (alias `DELETE /api/forms/:submissionId`, resolves the site from the submission)
+- Analytics: `POST /api/analytics/track` (public), `GET /api/analytics/:websiteId/summary?from&to` (returns `views`, `uniqueVisitors`, `today`, `week`, `month`, `byPage`, `byDay`), `GET /api/analytics/:websiteId/by-page`
+- Members: `GET|POST /api/websites/:id/members`, `PATCH|DELETE /api/websites/:id/members/:memberId` (aliases `PATCH|DELETE /api/members/:memberId` resolve the site from the member doc; roles are `editor`/`viewer` only)
 
 ## Testing
 
@@ -219,7 +231,14 @@ npm run test:server
 npm --prefix server test
 ```
 
-Covers: register/login/me, website CRUD + duplicate, editor-cannot-delete (403), page create/update, autosave version creation, version restore, publish snapshot isolation (public sees published only), form submit + owner list. Uses in-memory Mongo so no local DB needed.
+29 tests across 5 suites: register/login/me, website CRUD + duplicate + slug clash (409), editor-cannot-delete (403), page create/update, autosave version creation, version restore, publish snapshot isolation (public sees published only), form submit + owner list, plus the demo suite (demo login, public slug endpoint incl. draft-404, template v2 seeding, from-template, wrapped `{theme}` body with client keys, slug/SEO update, analytics windows). Uses in-memory Mongo so no local DB needed.
+
+## Performance notes
+
+- Route-level code splitting via `React.lazy` + `Suspense` (`routes/AppRoutes.jsx`) — the initial chunk is ~134 kB gzip-included; `charts` (recharts) and `dnd` (@dnd-kit) load only on pages that use them (`vite.config.js` `manualChunks`).
+- Google Fonts (Space Grotesk / Inter / JetBrains Mono) load with `preconnect` + `display=swap` (`client/index.html`); system fallbacks before they arrive.
+- Media uploads served by nginx directly from the backend `/uploads` route in Docker (`client/nginx.conf` proxies `/api` + `/uploads` to `backend:5000`); the Vite dev server proxies both as well.
+- All animation is CSS-based (no animation library); `Reveal` uses one `IntersectionObserver` per instance and cleans up on unmount. `prefers-reduced-motion` disables transitions/animations globally.
 
 ## Deployment instructions
 

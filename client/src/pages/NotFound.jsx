@@ -1,15 +1,25 @@
-import { Link } from 'react-router-dom';
-import Button from '../components/Button.jsx';
+import { Compass, Home, LayoutDashboard } from 'lucide-react';
+import { ButtonLink } from '../components/Button.jsx';
 
 export function NotFound() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center p-6 text-center">
-      <p className="text-6xl font-extrabold text-primary-600">404</p>
-      <h1 className="mt-2 text-xl font-semibold">Page not found</h1>
-      <p className="mt-1 text-sm text-slate-500">The page you are looking for does not exist.</p>
-      <div className="mt-5 flex gap-2">
-        <Link to="/"><Button variant="secondary">Home</Button></Link>
-        <Link to="/dashboard"><Button>Dashboard</Button></Link>
+    <div className="sf-hero-gradient flex min-h-screen flex-col items-center justify-center p-6 text-center">
+      <div className="animate-fade-up">
+        <p className="relative font-display text-[7rem] font-bold leading-none tracking-tight text-gradient sm:text-[9rem]" aria-hidden="true">
+          404
+        </p>
+        <h1 className="sr-only">Page not found</h1>
+        <div className="-mt-6 flex items-center justify-center gap-2 text-slate-500 dark:text-slate-400">
+          <Compass size={16} className="text-primary-500" />
+          <p className="text-sm font-medium">This page drifted off the canvas.</p>
+        </div>
+        <p className="mx-auto mt-2 max-w-sm text-sm text-slate-500 dark:text-slate-400">
+          The page you are looking for does not exist or may have been moved.
+        </p>
+        <div className="mt-7 flex flex-wrap justify-center gap-2">
+          <ButtonLink to="/" variant="outline"><Home size={15} /> Home</ButtonLink>
+          <ButtonLink to="/dashboard" variant="gradient"><LayoutDashboard size={15} /> Dashboard</ButtonLink>
+        </div>
       </div>
     </div>
   );
