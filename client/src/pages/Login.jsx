@@ -5,7 +5,7 @@ import { ArrowRight } from 'lucide-react';
 import { loginSchema } from '../schemas/auth.schema.js';
 import useAuthStore from '../store/authStore.js';
 import useUiStore from '../store/uiStore.js';
-import { Input } from '../components/Input.jsx';
+import { Input, PasswordInput } from '../components/Input.jsx';
 import Button from '../components/Button.jsx';
 import DemoAccessPanel from '../components/DemoAccessPanel.jsx';
 import { DEMO_CREDENTIALS } from '../config/demo.js';
@@ -59,9 +59,8 @@ export function Login() {
           error={errors.email?.message}
           {...register('email')}
         />
-        <Input
+        <PasswordInput
           label="Password"
-          type="password"
           autoComplete="current-password"
           placeholder="••••••••"
           error={errors.password?.message}

@@ -5,7 +5,7 @@ import { ArrowRight } from 'lucide-react';
 import { registerSchema } from '../schemas/auth.schema.js';
 import useAuthStore from '../store/authStore.js';
 import useUiStore from '../store/uiStore.js';
-import { Input } from '../components/Input.jsx';
+import { Input, PasswordInput } from '../components/Input.jsx';
 import Button from '../components/Button.jsx';
 
 export function Register() {
@@ -61,17 +61,15 @@ export function Register() {
           error={errors.email?.message}
           {...register('email')}
         />
-        <Input
+        <PasswordInput
           label="Password"
-          type="password"
           autoComplete="new-password"
           placeholder="At least 6 characters"
           error={errors.password?.message}
           {...register('password')}
         />
-        <Input
+        <PasswordInput
           label="Confirm password"
-          type="password"
           autoComplete="new-password"
           placeholder="Repeat your password"
           error={errors.confirmPassword?.message}
