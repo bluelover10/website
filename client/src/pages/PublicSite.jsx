@@ -1,6 +1,6 @@
 // Public site: /site/:slug (and /site/:slug/:pageSlug).
-// Published content via websiteService.getBySlug (fallback: /api/publish + /api/websites/published),
-// analytics via analyticsService.track, SEO meta, page routing (?page= or sub-route), 404/loading states.
+// Published content via GET /api/websites/slug/:slug; analytics via analyticsService.track,
+// SEO meta, page routing (?page= or sub-route), 404/loading states.
 import React, { useEffect, useState } from 'react';
 import { useParams, useSearchParams, useNavigate, Link } from 'react-router-dom';
 import websiteService from '../services/website.service';

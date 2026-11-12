@@ -65,7 +65,7 @@ export function renderNode(node, ctx) {
 
 function RendererBase({ tree, mode = 'preview', theme = {}, website = null, pages = [], navigate, onSelect, selectedId }) {
   const vars = {
-    '--sf-primary': theme.primary || '#4f46e5',
+    '--sf-primary': theme.primary || '#5b4fd6',
     '--sf-secondary': theme.secondary || '#0ea5e9',
     '--sf-background': theme.background || '#ffffff',
     '--sf-text': theme.text || '#111827',

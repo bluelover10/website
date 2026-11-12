@@ -25,7 +25,7 @@ const websiteSchema = new mongoose.Schema(
     theme: {
       type: mongoose.Schema.Types.Mixed,
       default: {
-        primary: '#4f46e5',
+        primary: '#5b4fd6',
         secondary: '#0ea5e9',
         background: '#ffffff',
         text: '#111827',

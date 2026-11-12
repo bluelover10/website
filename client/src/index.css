@@ -131,6 +131,28 @@ h1, h2, h3, h4 {
       radial-gradient(50% 80% at 85% 20%, rgba(245, 158, 11, 0.14) 0%, transparent 60%),
       radial-gradient(70% 100% at 50% 100%, rgba(111, 92, 223, 0.1) 0%, transparent 65%);
   }
+
+  /* Inputs inside rendered site blocks (contact form etc.) — themed by the
+     site's own --sf-primary, not the app shell. */
+  .sf-rendered-input {
+    width: 100%;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    font-family: inherit;
+    color: #111827;
+    background: #fff;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .sf-rendered-input::placeholder {
+    color: #9ca3af;
+  }
+  .sf-rendered-input:focus {
+    outline: none;
+    border-color: var(--sf-primary, #5b4fd6);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--sf-primary, #5b4fd6) 25%, transparent);
+  }
 }
 
 /* --------------------------- utilities ---------------------------------- */

@@ -43,7 +43,7 @@ export default function EditorDndProvider({ children }) {
       {children}
       <DragOverlay dropAnimation={{ duration: 150, easing: 'ease' }}>
         {dragLabel ? (
-          <div className="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-xs font-medium shadow-lg">{dragLabel}</div>
+          <div className="px-3 py-1.5 rounded-lg bg-primary-600 text-white text-xs font-semibold shadow-pop">{dragLabel}</div>
         ) : null}
       </DragOverlay>
     </DndContext>

@@ -12,7 +12,7 @@ export function Button({ node }) {
       <a
         href={p.href || '#'}
         style={{
-          display: 'inline-block', background: p.background || 'var(--sf-primary, #4f46e5)',
+          display: 'inline-block', background: p.background || 'var(--sf-primary, #5b4fd6)',
           color: p.color || '#fff', borderRadius: px(p.radius ?? 8),
           padding: `${px(p.paddingY ?? 12)} ${px(p.paddingX ?? 24)}`,
           fontWeight: 600, textDecoration: 'none', fontSize: 15,
@@ -50,10 +50,10 @@ export function ContactForm({ node, website }) {
       {p.title && <h3 className="text-xl font-bold mb-1" style={{ color: 'var(--sf-text, #111827)' }}>{p.title}</h3>}
       {p.subtitle && <p className="text-sm text-slate-500 mb-4">{p.subtitle}</p>}
       <form onSubmit={submit} className="flex flex-col gap-3">
-        <input className="border rounded-md px-3 py-2 text-sm" placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-        <input className="border rounded-md px-3 py-2 text-sm" placeholder="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
-        <textarea className="border rounded-md px-3 py-2 text-sm" placeholder="Message" rows={4} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} required />
-        <button type="submit" disabled={status === 'sending'} className="rounded-md px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60" style={{ background: 'var(--sf-primary, #4f46e5)' }}>
+        <input className="sf-rendered-input" placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+        <input className="sf-rendered-input" placeholder="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+        <textarea className="sf-rendered-input resize-y" placeholder="Message" rows={4} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} required />
+        <button type="submit" disabled={status === 'sending'} className="rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60" style={{ background: 'var(--sf-primary, #5b4fd6)' }}>
           {status === 'sending' ? 'Sending…' : status === 'sent' ? 'Sent ✓' : (p.submitText || 'Send message')}
         </button>
         {status === 'error' && <p className="text-xs text-red-600">Could not submit. Try again later.</p>}

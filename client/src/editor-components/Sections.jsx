@@ -18,7 +18,7 @@ export function Navbar({ node, pages = [], navigate }) {
             <a key={i} href={l.href || '#'} onClick={l.pageSlug && navigate ? (e) => { e.preventDefault(); navigate(l.pageSlug); } : undefined} className="hover:opacity-70">{l.label}</a>
           ))}
         </div>
-        {p.ctaText && <a href={p.ctaHref || '#'} className="text-sm font-semibold text-white rounded-md px-4 py-2" style={{ background: 'var(--sf-primary, #4f46e5)' }}>{p.ctaText}</a>}
+        {p.ctaText && <a href={p.ctaHref || '#'} className="text-sm font-semibold text-white rounded-lg px-4 py-2 transition hover:brightness-110" style={{ background: 'var(--sf-primary, #5b4fd6)' }}>{p.ctaText}</a>}
       </div>
     </nav>
   );
@@ -33,7 +33,7 @@ export function Hero({ node, children }) {
         <h1 style={{ fontSize: 44, fontWeight: 800, lineHeight: 1.1, margin: 0, fontFamily: 'var(--sf-heading-font, inherit)' }}>{p.title || 'Build something great'}</h1>
         {p.subtitle && <p style={{ fontSize: 18, opacity: 0.85, margin: 0 }}>{p.subtitle}</p>}
         <div className="flex gap-3 flex-wrap" style={{ justifyContent: centered ? 'center' : 'flex-start' }}>
-          {p.ctaText && <a href={p.ctaHref || '#'} className="rounded-lg px-6 py-3 font-semibold text-white" style={{ background: 'var(--sf-primary, #4f46e5)' }}>{p.ctaText}</a>}
+          {p.ctaText && <a href={p.ctaHref || '#'} className="rounded-lg px-6 py-3 font-semibold text-white" style={{ background: 'var(--sf-primary, #5b4fd6)' }}>{p.ctaText}</a>}
           {p.secondaryText && <a href={p.secondaryHref || '#'} className="rounded-lg px-6 py-3 font-semibold border" style={{ borderColor: 'currentColor' }}>{p.secondaryText}</a>}
         </div>
         {p.image && <img src={p.image} alt="hero" style={{ width: '100%', maxWidth: 720, borderRadius: 16, marginTop: 16 }} />}
@@ -108,7 +108,7 @@ export function Pricing({ node }) {
           {plans.map((pl, i) => (
             <div key={i} className="border rounded-xl p-6 text-center" style={{ borderColor: '#e5e7eb' }}>
               <h4 className="font-semibold">{pl.name}</h4>
-              <div className="text-3xl font-extrabold my-2" style={{ color: 'var(--sf-primary, #4f46e5)' }}>{pl.price}</div>
+              <div className="text-3xl font-extrabold my-2" style={{ color: 'var(--sf-primary, #5b4fd6)' }}>{pl.price}</div>
               <ul className="text-sm text-slate-500 flex flex-col gap-1">{(pl.features || []).map((f, j) => <li key={j}>✓ {f}</li>)}</ul>
             </div>
           ))}

@@ -34,7 +34,7 @@ export function Link({ node }) {
   const p = node.props || {};
   return (
     <a href={p.href || '#'} style={{
-      color: p.color || 'var(--sf-primary, #4f46e5)', fontSize: px(p.fontSize ?? 16),
+      color: p.color || 'var(--sf-primary, #5b4fd6)', fontSize: px(p.fontSize ?? 16),
       textDecoration: p.underline === false ? 'none' : 'underline',
     }}>
       {p.text || p.content || 'Learn more'}

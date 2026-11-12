@@ -121,7 +121,7 @@ export function DashboardLayout() {
       {mobileNavOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm animate-fade-in" onClick={() => setMobileNav(false)} aria-hidden="true" />
-          <aside className="relative flex h-full w-72 flex-col border-r border-slate-200 bg-white shadow-pop animate-slide-in-right dark:border-slate-800 dark:bg-surface-inv2">
+          <aside className="relative flex h-full w-72 flex-col border-r border-slate-200 bg-white shadow-pop animate-slide-in-left dark:border-slate-800 dark:bg-surface-inv2">
             <div className="flex h-16 items-center justify-between border-b border-slate-100 px-4 dark:border-slate-800">
               <Link to="/" className="flex items-center gap-2.5" onClick={() => setMobileNav(false)}>
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 font-display text-base font-bold text-white">S</span>

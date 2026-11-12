@@ -8,8 +8,8 @@ export const DEFAULT_PROPS = {
   heading: { content: 'New Heading', level: 'h2', fontSize: 32, fontWeight: 700, align: 'left', color: '#111827', lineHeight: 1.2 },
   text: { content: 'Add some descriptive text here. Click to edit in the right panel.', fontSize: 16, align: 'left', color: '#4b5563', lineHeight: 1.6 },
   image: { src: 'https://picsum.photos/seed/siteforge/800/500', alt: 'Image', width: '100%', height: 'auto', fit: 'cover', radius: 8 },
-  button: { text: 'Click me', href: '#', background: '#4f46e5', color: '#ffffff', radius: 8, paddingX: 24, paddingY: 12, align: 'left' },
-  link: { text: 'Learn more', href: '#', color: '#4f46e5', fontSize: 16, underline: true },
+  button: { text: 'Click me', href: '#', background: '#5b4fd6', color: '#ffffff', radius: 8, paddingX: 24, paddingY: 12, align: 'left' },
+  link: { text: 'Learn more', href: '#', color: '#5b4fd6', fontSize: 16, underline: true },
   divider: { color: '#e5e7eb', thickness: 1, margin: 16, style: 'solid' },
   spacer: { height: 32 },
   navbar: {
