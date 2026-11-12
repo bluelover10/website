@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import {
   LayoutDashboard, Globe, LayoutTemplate, Image, Settings, Menu, X,
-  Sun, Moon, Plus, LogOut,
+  Sun, Moon, Plus, LogOut, ShieldCheck,
 } from 'lucide-react';
 import useUiStore from '../store/uiStore.js';
 import useAuthStore from '../store/authStore.js';
@@ -14,6 +14,12 @@ const links = [
   { to: '/templates', label: 'Templates', icon: LayoutTemplate },
   { to: '/media', label: 'Media', icon: Image },
   { to: '/settings', label: 'Settings', icon: Settings },
+];
+
+// Platform admin section — only rendered for accounts with role 'admin'.
+// Access is still enforced server-side on every /api/admin endpoint.
+const adminLinks = [
+  { to: '/admin', label: 'Admin', icon: ShieldCheck, admin: true },
 ];
 
 function NavItem({ to, label, icon: Icon, onNavigate, showLabel }) {
@@ -52,6 +58,8 @@ function NavItem({ to, label, icon: Icon, onNavigate, showLabel }) {
 export function DashboardLayout() {
   const { sidebarOpen, toggleSidebar, mobileNavOpen, toggleMobileNav, setMobileNav, darkMode, toggleDarkMode, initTheme } = useUiStore();
   const { user, logout } = useAuthStore();
+  const isAdmin = user?.role === 'admin';
+  const navItems = isAdmin ? [...links, ...adminLinks] : links;
 
   useEffect(() => {
     initTheme();
@@ -87,8 +95,10 @@ export function DashboardLayout() {
         </Link>
 
         <nav className="flex-1 space-y-1 p-3">
-          {links.map(({ to, label, icon }) => (
-            <NavItem key={to} to={to} label={label} icon={icon} showLabel={sidebarOpen} />
+          {navItems.map(({ to, label, icon, admin }) => (
+            <span key={to} className={cn('block', admin && 'mt-2 border-t border-slate-100 pt-2 dark:border-slate-800')}>
+              <NavItem to={to} label={label} icon={icon} showLabel={sidebarOpen} />
+            </span>
           ))}
         </nav>
 
@@ -132,8 +142,10 @@ export function DashboardLayout() {
               </button>
             </div>
             <nav className="flex-1 space-y-1 p-3">
-              {links.map(({ to, label, icon }) => (
-                <NavItem key={to} to={to} label={label} icon={icon} showLabel onNavigate={() => setMobileNav(false)} />
+              {navItems.map(({ to, label, icon, admin }) => (
+                <span key={to} className={cn('block', admin && 'mt-2 border-t border-slate-100 pt-2 dark:border-slate-800')}>
+                  <NavItem to={to} label={label} icon={icon} showLabel onNavigate={() => setMobileNav(false)} />
+                </span>
               ))}
             </nav>
             <div className="border-t border-slate-100 p-3 dark:border-slate-800">

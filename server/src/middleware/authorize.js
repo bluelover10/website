@@ -55,4 +55,19 @@ function requireOwnerRole() {
   return requireWebsiteRole(['owner']);
 }
 
-module.exports = { requireWebsiteRole, requireOwnerRole };
+// Platform-level admin gate: requires an authenticated user whose ACCOUNT role
+// is 'admin' (User.role). Independent of per-website membership roles — an
+// admin does not need to be a member of a site to administer it.
+// Must run after `protect` (req.user is set there); the check below is defense
+// in depth so mounting order can never silently bypass the gate.
+const requireAdmin = asyncHandler(async (req, res, next) => {
+  if (!req.user) {
+    throw new ApiError(401, 'Authentication required', 'UNAUTHENTICATED');
+  }
+  if (req.user.role !== 'admin') {
+    throw new ApiError(403, 'Forbidden: admin access required', 'FORBIDDEN_ADMIN');
+  }
+  return next();
+});
+
+module.exports = { requireWebsiteRole, requireOwnerRole, requireAdmin };

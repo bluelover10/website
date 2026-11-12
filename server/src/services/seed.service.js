@@ -22,6 +22,14 @@ const DEMO_EMAIL = 'demo@siteforge.app';
 const DEMO_PASSWORD = 'demo1234';
 const DEMO_NAME = 'Demo User';
 
+// Platform admin account — NOT public demo credentials. Override via env in any
+// real deployment (ADMIN_EMAIL / ADMIN_PASSWORD) and change the password before
+// exposing the server. Seeded idempotently so boot always ends with exactly one
+// working admin account.
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@siteforge.app').toLowerCase();
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin1234';
+const ADMIN_NAME = process.env.ADMIN_NAME || 'SiteForge Admin';
+
 // ---------------------------------------------------------------------------
 // Node helpers — shapes consumed by client/src/editor/Renderer.jsx
 // ---------------------------------------------------------------------------
@@ -553,19 +561,46 @@ async function seedDemoSite() {
   return { demoUser, demoWebsite: publishedWebsite, created: true };
 }
 
+// Platform admin account. Idempotent, and self-healing: if a user with the
+// admin email exists but isn't an admin (e.g. created before this role was
+// wired up), promote it so boot always ends with a working admin.
+async function seedAdminUser() {
+  const existing = await User.findOne({ email: ADMIN_EMAIL });
+  if (existing) {
+    if (existing.role !== 'admin') {
+      existing.role = 'admin';
+      await existing.save();
+    }
+    return { adminUser: existing, adminCreated: false };
+  }
+  const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
+  const adminUser = await User.create({
+    name: ADMIN_NAME,
+    email: ADMIN_EMAIL,
+    passwordHash,
+    role: 'admin',
+  });
+  return { adminUser, adminCreated: true };
+}
+
 /** Runs once per boot. Idempotent. */
 async function runSeeds() {
   const templateResult = await seedTemplates();
   const demoResult = await seedDemoSite();
-  return { ...templateResult, ...demoResult };
+  const adminResult = await seedAdminUser();
+  return { ...templateResult, ...demoResult, ...adminResult };
 }
 
 module.exports = {
   runSeeds,
   seedTemplates,
   seedDemoSite,
+  seedAdminUser,
   DEMO_EMAIL,
   DEMO_PASSWORD,
   DEMO_NAME,
+  ADMIN_EMAIL,
+  ADMIN_PASSWORD,
+  ADMIN_NAME,
   SEED_VERSION,
 };

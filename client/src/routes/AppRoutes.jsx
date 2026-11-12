@@ -24,12 +24,27 @@ const Editor = lazy(() => import('../pages/Editor.jsx'));
 const Preview = lazy(() => import('../pages/Preview.jsx'));
 const PublicSite = lazy(() => import('../pages/PublicSite.jsx'));
 const Analytics = lazy(() => import('../pages/Analytics.jsx'));
+const AdminDashboard = lazy(() => import('../pages/admin/AdminDashboard.jsx'));
+const AdminUsers = lazy(() => import('../pages/admin/AdminUsers.jsx'));
+const AdminWebsites = lazy(() => import('../pages/admin/AdminWebsites.jsx'));
 
 export function ProtectedRoute() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const location = useLocation();
   if (!isAuthenticated) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+  return <Outlet />;
+}
+
+// Client-side role guard for /admin pages. Defense in depth: the server
+// independently enforces requireAdmin on every /api/admin endpoint, so a
+// stale client can never read admin data — it just gets redirected.
+export function AdminRoute() {
+  const user = useAuthStore((s) => s.user);
+  const location = useLocation();
+  if (user?.role !== 'admin') {
+    return <Navigate to="/dashboard" replace state={{ from: location.pathname }} />;
   }
   return <Outlet />;
 }
@@ -60,6 +75,12 @@ export function AppRoutes() {
             <Route path="/websites/:id/analytics" element={<Analytics />} />
             <Route path="/websites/:id/team" element={<Team />} />
             <Route path="/settings" element={<SiteSettings />} />
+            {/* Platform admin — account role, double-enforced server-side */}
+            <Route element={<AdminRoute />}>
+              <Route path="/admin" element={<AdminDashboard />} />
+              <Route path="/admin/users" element={<AdminUsers />} />
+              <Route path="/admin/websites" element={<AdminWebsites />} />
+            </Route>
           </Route>
           <Route element={<EditorLayout />}>
             <Route path="/websites/:id/edit" element={<Editor />} />

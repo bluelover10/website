@@ -77,22 +77,39 @@ Design system: primary **forge violet #5b4fd6** + amber accent, Space Grotesk (d
 ## 5. Security review
 
 - **Auth**: JWT with bcrypt hashing; server-side RBAC via `requireWebsiteRole` (`owner` > `editor` > `viewer`; editor cannot delete or change settings — verified by a 403 test).
+- **Platform admin**: separate account role enforced by `requireAdmin` on every `/api/admin` route (401 anonymous / 403 non-admin — both covered by tests). Client `AdminRoute` is convenience only. Admin credentials are env-driven, not public; self-role-change blocked server-side.
 - **Public surface** limited to: register/login, `GET /api/websites/slug/:slug` (published only), `POST /api/analytics/track`, `POST /api/websites/:id/forms/submit`. Everything else requires a token + role check.
 - **Demo account** is the only intentional public credential; it holds no admin powers and its values live in `config/demo.js` + seed service. No real secrets are committed — `JWT_SECRET` in docker-compose is an explicitly-labeled placeholder.
 - Client-side route guards are convenience only; all authorization is enforced server-side. React escapes rendered user content (no `dangerouslySetInnerHTML` introduced).
 
 Residual risks (not addressed, out of scope): no rate limiting/brute-force protection on auth or public endpoints; placeholder `JWT_SECRET` must be replaced before any real deployment; file upload MIME restrictions should be re-checked server-side before production use.
 
-## 6. Testing & verification (what was actually run)
+## 7. Admin system (platform administration)
+
+The `admin` account role existed in the User schema but was wired to nothing — no middleware, no routes, no UI. Now it is a real, server-enforced role:
+
+- **Middleware**: `requireAdmin` in `server/src/middleware/authorize.js` — requires `req.user.role === 'admin'` (401 anonymous / 403 non-admin). Independent of per-website membership roles.
+- **Routes** (`server/src/routes/admin.routes.js`, mounted at `/api/admin` after `protect`):
+  - `GET /stats` — platform counts (users, sites, published/drafts, pages, media, submissions, views) + newest accounts & recently updated sites
+  - `GET /users` — paginated, `search` (regex-escaped) + `role` filters, owned-site counts via one aggregate
+  - `PATCH /users/:id/role` — promote/demote; **self-role-change blocked** (`400 CANNOT_CHANGE_SELF`) to prevent the no-admins-left lockout
+  - `GET /websites` — every site, owner populated, `search`/`status` filters, page counts
+  - `POST /websites/:id/unpublish` — take any live site offline (reuses `publish.service`)
+  - `DELETE /websites/:id` — force-delete with the **same full cleanup** as the owner path (pages, versions, members, submissions, analytics, publish versions, media)
+- **Seeded admin** in `seed.service.js`: `ADMIN_EMAIL`/`ADMIN_PASSWORD`/`ADMIN_NAME` env (defaults `admin@siteforge.app` / `admin1234`, documented change-before-deploy). Idempotent and self-healing — an existing account with that email is promoted at boot. These are **not** public demo credentials and are not rendered anywhere in the client.
+- **Client**: `services/admin.service.js`, lazy admin pages (`pages/admin/AdminDashboard|AdminUsers|AdminWebsites`) under DashboardLayout, admin-only sidebar section (shield icon, divider), `AdminRoute` guard redirecting non-admins to `/dashboard`. Still **one login** — admins use the same `/login` page and JWT.
+- **UI conventions**: existing design system (Reveal, Badge, EmptyState, Skeleton, `askConfirm` promise dialogs for unpublish/delete/role changes, debounced search, Prev/Next pagination).
+
+## 8. Testing & verification (what was actually run)
 
 | Check | Result |
 | --- | --- |
-| `npm run test:server` (jest, in-memory Mongo) | **29/29 pass** across 5 suites (~12 s) — auth, website CRUD + duplicate + 409 slug clash, RBAC 403, pages, autosave versions, restore, publish snapshot isolation, forms, demo suite (demo login, public slug + draft-404, template seeding, from-template, wrapped `{theme}` body, slug/SEO update, analytics windows) |
-| `npm run build:client` (vite production build) | **Passes** — chunk split as reported in §4 |
+| `npm run test:server` (jest, in-memory Mongo) | **39/39 pass** across 6 suites — auth, website CRUD + duplicate + 409 slug clash, RBAC 403, pages, autosave versions, restore, publish snapshot isolation, forms, demo suite (demo login, public slug + draft-404, template seeding, from-template, wrapped `{theme}` body, slug/SEO update, analytics windows), and the new admin suite (seed + login role, 401/403 gating, stats, users search + role change + self-change/invalid-role rejections, platform website list/filter, admin unpublish → public 404, force-delete with member cleanup) |
+| `npm run build:client` (vite production build) | **Passes** — chunk split as reported in §4 (admin pages are lazy chunks; initial `index` 135.90 kB / 44.81 kB gzip) |
 
 **Not verified** (stated honestly): no automated browser/E2E tests exist in the project, so visual rendering and interactions were not exercised in a running browser; Docker images/compose were not built or run, so the nginx proxy path is reviewed-but-not-executed; dev servers were not started during this pass.
 
-## 7. Remaining issues / limits
+## 9. Remaining issues / limits
 
 - No browser/E2E or visual-regression coverage (only build + server tests were available and run).
 - The `charts` vendor chunk is ~395 kB minified (recharts); it is lazy-loaded but heavy if analytics is opened often.

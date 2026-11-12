@@ -13,11 +13,32 @@ Password: demo1234
 
 The login page shows copy buttons and a **“Use Demo Account”** button that fills the form. The demo user owns a published demo site (“Nova Creative Studio”) with seeded form submissions and 14 days of analytics events. The account has no admin powers — it is a regular `owner` of that single demo site. Never place real credentials in `config/demo.js`; it is public by design.
 
+## Admin account & platform admin
+
+On first boot the server also seeds a **platform admin** account (`server/src/services/seed.service.js`). Unlike the demo credentials, these are **not public** — override them via env before deploying and change the password:
+
+| Env var | Default | Purpose |
+| --- | --- | --- |
+| `ADMIN_EMAIL` | `admin@siteforge.app` | Admin login email |
+| `ADMIN_PASSWORD` | `admin1234` | **Change before deploying** |
+| `ADMIN_NAME` | `SiteForge Admin` | Display name |
+
+- Seeding is idempotent and self-healing: an existing account with `ADMIN_EMAIL` that is not yet an admin is promoted at boot.
+- **There is still only one login** (`/login`) — admins authenticate through the same page and the same JWT; their account `role` unlocks the admin surface.
+- Server-enforced: every `/api/admin` route runs `protect` + `requireAdmin` (`server/src/middleware/authorize.js`), returning `401` for anonymous and `403` for non-admin accounts. Client-side `AdminRoute` is only a redirect convenience, never the security boundary.
+
+**Admin surface** (sidebar section visible only to admins):
+- `/admin` — platform stats (users, sites, published, pages, media, submissions, views) + newest accounts / recently updated sites
+- `/admin/users` — search & filter accounts, view owned-site counts, promote/demote (`PATCH /api/admin/users/:id/role`). Changing your own role is blocked server-side (`CANNOT_CHANGE_SELF`) and hidden in the UI.
+- `/admin/websites` — every site with owner, page/view counts, status filter; **unpublish** any live site (`POST /api/admin/websites/:id/unpublish`) and **force-delete** any site with the same full cleanup as the owner path (`DELETE /api/admin/websites/:id`)
+
 ## Features
 
-**Auth & teams**
+**Auth & roles**
 - JWT register / login / me, bcrypt password hashing
+- Account roles: `user` (default) and `admin` (platform administration, enforced by `requireAdmin`)
 - Website roles: `owner` (full), `editor` (edit content/media/save, no delete/settings), `viewer` (view/preview only). All checks run server-side via `requireWebsiteRole`.
+- Platform admin endpoints under `/api/admin` (stats, users, role changes, cross-account site management)
 
 **Dashboard**
 - My sites, recently edited, published vs draft filters, total pages, views (from analytics)
@@ -156,6 +177,11 @@ CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=
 MAX_FILE_SIZE=5242880
 UPLOAD_DIR=uploads
+
+# Platform admin (seeded at boot; override + change password before deploying)
+ADMIN_EMAIL=admin@siteforge.app
+ADMIN_PASSWORD=change-me-before-deploying
+ADMIN_NAME=SiteForge Admin
 ```
 
 `client/.env`: `VITE_API_URL=http://localhost:5000` (dev uses Vite proxy `/api → :5000` so this is only for explicit uses).
@@ -222,6 +248,7 @@ All JSON is `{success:true,data}` or `{success:false,message,errorCode}`.
 - Forms: `POST /api/websites/:id/forms/submit` (public, alias `POST /api/forms/:websiteId/submit`), `GET /api/websites/:id/forms` (owner/editor), `DELETE /api/websites/:id/forms/:submissionId` (alias `DELETE /api/forms/:submissionId`, resolves the site from the submission)
 - Analytics: `POST /api/analytics/track` (public), `GET /api/analytics/:websiteId/summary?from&to` (returns `views`, `uniqueVisitors`, `today`, `week`, `month`, `byPage`, `byDay`), `GET /api/analytics/:websiteId/by-page`
 - Members: `GET|POST /api/websites/:id/members`, `PATCH|DELETE /api/websites/:id/members/:memberId` (aliases `PATCH|DELETE /api/members/:memberId` resolve the site from the member doc; roles are `editor`/`viewer` only)
+- Admin (account role `admin` only — `401` anonymous, `403` otherwise): `GET /api/admin/stats`, `GET /api/admin/users?search&role&page&limit`, `PATCH /api/admin/users/:id/role` (`user|admin`; self-change → `400 CANNOT_CHANGE_SELF`), `GET /api/admin/websites?search&status&page&limit`, `POST /api/admin/websites/:id/unpublish`, `DELETE /api/admin/websites/:id` (full cleanup: pages, versions, members, submissions, analytics, publish versions, media)
 
 ## Testing
 
@@ -231,7 +258,7 @@ npm run test:server
 npm --prefix server test
 ```
 
-29 tests across 5 suites: register/login/me, website CRUD + duplicate + slug clash (409), editor-cannot-delete (403), page create/update, autosave version creation, version restore, publish snapshot isolation (public sees published only), form submit + owner list, plus the demo suite (demo login, public slug endpoint incl. draft-404, template v2 seeding, from-template, wrapped `{theme}` body with client keys, slug/SEO update, analytics windows). Uses in-memory Mongo so no local DB needed.
+38 tests across 6 suites: register/login/me, website CRUD + duplicate + slug clash (409), editor-cannot-delete (403), page create/update, autosave version creation, version restore, publish snapshot isolation (public sees published only), form submit + owner list, the demo suite (demo login, public slug endpoint incl. draft-404, template v2 seeding, from-template, wrapped `{theme}` body with client keys, slug/SEO update, analytics windows), and the admin suite (admin seed + login with role, 401/403 gating, stats, users list + search, role promotion + self-change/invalid-role rejections, platform website list with owner populate + status filter, admin unpublish → public 404, admin force-delete with member cleanup). Uses in-memory Mongo so no local DB needed.
 
 ## Performance notes
 

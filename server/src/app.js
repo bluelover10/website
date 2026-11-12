@@ -17,6 +17,7 @@ const mediaRoutes = require('./routes/media.routes');
 const formsRoutes = require('./routes/forms.routes');
 const analyticsRoutes = require('./routes/analytics.routes');
 const membersRoutes = require('./routes/members.routes');
+const adminRoutes = require('./routes/admin.routes');
 
 const app = express();
 
@@ -67,6 +68,8 @@ app.use('/api/pages', pagesRoutes);
 app.use('/api/versions', versionsRoutes);
 app.use('/api/members', membersRoutes);
 app.use('/api/media', mediaRoutes);
+// Platform admin (account role, enforced by requireAdmin)
+app.use('/api/admin', adminRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

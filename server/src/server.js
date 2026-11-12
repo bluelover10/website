@@ -19,6 +19,10 @@ async function start() {
       // eslint-disable-next-line no-console
       console.log(`Seeded public demo site for ${result.demoUser.email}`);
     }
+    if (result.adminCreated) {
+      // eslint-disable-next-line no-console
+      console.log(`Seeded platform admin account ${result.adminUser.email}`);
+    }
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('Seeding warning (continuing):', err.message);
