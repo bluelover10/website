@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Image as ImageIcon, Search, Trash2, Upload, Check, Loader2 } from 'lucide-react';
 import mediaService from '../services/media.service.js';
+import websiteService from '../services/website.service.js';
 import useUiStore from '../store/uiStore.js';
+import Button from '../components/Button.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import Reveal from '../components/Reveal.jsx';
 
-function MediaTile({ m, onSelect, onDelete, selectable }) {
+function MediaTile({ m, onSelect, onDelete, selectable, siteName }) {
   const url = m.url || m.src || m.path;
   const id = m._id || m.id || url;
   return (
@@ -19,17 +21,21 @@ function MediaTile({ m, onSelect, onDelete, selectable }) {
         {/* hover overlay */}
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 bg-slate-950/0 opacity-0 transition-all duration-200 group-hover:bg-slate-950/30 group-hover:opacity-100" />
       </div>
-      <div className="flex items-center justify-between gap-2 p-2.5">
-        <p className="truncate text-xs font-medium text-slate-600 dark:text-slate-300" title={m.name || url}>{m.name || url}</p>
-        <div className="flex shrink-0 gap-0.5">
-          {selectable && (
-            <button onClick={() => onSelect?.(m)} className="rounded-md p-1.5 text-slate-400 transition hover:bg-primary-50 hover:text-primary-600 dark:hover:bg-slate-800" title="Select" aria-label={`Select ${m.name || 'image'}`}>
-              <Check size={15} />
+      <div className="p-2.5">
+        {/* In "all sites" view, name the site each asset belongs to */}
+        {siteName && <p className="mb-1 truncate text-2xs font-medium text-slate-400 dark:text-slate-500">{siteName}</p>}
+        <div className="flex items-center justify-between gap-2">
+          <p className="truncate text-xs font-medium text-slate-600 dark:text-slate-300" title={m.name || url}>{m.name || url}</p>
+          <div className="flex shrink-0 gap-0.5">
+            {selectable && (
+              <button onClick={() => onSelect?.(m)} className="rounded-md p-1.5 text-slate-400 transition hover:bg-primary-50 hover:text-primary-600 dark:hover:bg-slate-800" title="Select" aria-label={`Select ${m.name || 'image'}`}>
+                <Check size={15} />
+              </button>
+            )}
+            <button onClick={() => onDelete(m)} className="rounded-md p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40" title="Delete" aria-label={`Delete ${m.name || 'image'}`}>
+              <Trash2 size={15} />
             </button>
-          )}
-          <button onClick={() => onDelete(m)} className="rounded-md p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40" title="Delete" aria-label={`Delete ${m.name || 'image'}`}>
-            <Trash2 size={15} />
-          </button>
+          </div>
         </div>
       </div>
     </div>
@@ -44,14 +50,24 @@ export function MediaLibrary({ onSelect, websiteId }) {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [q, setQ] = useState('');
+  // Standalone library: media is stored per website, so keep a site filter and
+  // an upload target. 'all' lists every site the user can access (server scopes it).
+  const [sites, setSites] = useState([]);
+  const [siteId, setSiteId] = useState('all');
   const pushToast = useUiStore((s) => s.pushToast);
   const askConfirm = useUiStore((s) => s.askConfirm);
+
+  // Where new uploads land: an explicitly selected site, the picker's prop, or
+  // (in "all" view) the first accessible site.
+  const targetSiteId = websiteId || (siteId !== 'all' ? siteId : sites[0]?._id);
+  const targetSiteName = sites.find((s) => s._id === targetSiteId)?.name;
 
   const load = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await mediaService.list(websiteId ? { websiteId } : {});
+      const params = websiteId ? { websiteId } : siteId !== 'all' ? { websiteId: siteId } : {};
+      const res = await mediaService.list(params);
       setItems(Array.isArray(res) ? res : res?.items || res?.media || []);
     } catch (e) {
       setError(e?.message || 'Could not load your media.');
@@ -63,6 +79,24 @@ export function MediaLibrary({ onSelect, websiteId }) {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [websiteId, siteId]);
+
+  // Site list for the filter/upload picker (standalone page only). Failure here
+  // is non-fatal — the grid still renders and reports its own load state.
+  useEffect(() => {
+    if (websiteId) return undefined;
+    let cancelled = false;
+    websiteService
+      .list()
+      .then((res) => {
+        if (cancelled) return;
+        const list = Array.isArray(res) ? res : res?.websites || [];
+        setSites(list);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, [websiteId]);
 
   const handleUpload = async (e) => {
@@ -83,6 +117,12 @@ export function MediaLibrary({ onSelect, websiteId }) {
       valid.push(file);
     }
     if (!valid.length) return;
+    // Uploads are stored per website — resolve a concrete target before posting.
+    if (!targetSiteId) {
+      pushToast({ message: 'Create a website first — uploads are stored per site.', type: 'error' });
+      return;
+    }
+    const autoTargeted = !websiteId && siteId === 'all';
     setUploading(true);
     try {
       // Sequential uploads so each file's progress reads cleanly on the button.
@@ -90,12 +130,15 @@ export function MediaLibrary({ onSelect, websiteId }) {
         setProgress(0);
         const uploaded = await mediaService.upload(
           file,
-          websiteId ? { websiteId } : {},
+          { websiteId: targetSiteId },
           (fraction) => setProgress(Math.round(fraction * 100))
         );
         const entry = uploaded?.file || uploaded;
         if (entry) setItems((s) => [entry, ...s]);
-        pushToast({ message: `Uploaded ${file.name}`, type: 'success' });
+        pushToast({
+          message: autoTargeted && targetSiteName ? `Uploaded ${file.name} to “${targetSiteName}”` : `Uploaded ${file.name}`,
+          type: 'success',
+        });
       }
     } catch (err) {
       pushToast({ message: err.message, type: 'error' });
@@ -124,6 +167,7 @@ export function MediaLibrary({ onSelect, websiteId }) {
     });
   };
 
+  const siteNameById = new Map(sites.map((s) => [s._id, s.name]));
   const filtered = items.filter((m) => !q || (m.name || m.url || '').toLowerCase().includes(q.toLowerCase()));
 
   return (
@@ -151,17 +195,32 @@ export function MediaLibrary({ onSelect, websiteId }) {
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search media…" aria-label="Search media" className="sf-input pl-9" />
         </div>
+        {!websiteId && sites.length > 0 && (
+          <select
+            value={siteId}
+            onChange={(e) => setSiteId(e.target.value)}
+            aria-label="Filter by website"
+            className="sf-input w-full cursor-pointer sm:w-52"
+          >
+            <option value="all">All my sites</option>
+            {sites.map((s) => (
+              <option key={s._id} value={s._id}>{s.name}</option>
+            ))}
+          </select>
+        )}
         <label
           className={`
             inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold text-white
             bg-gradient-to-r from-primary-600 to-primary-500 shadow-xs transition-all duration-200
             hover:shadow-glow active:scale-[0.98] h-10
             ${uploading ? 'pointer-events-none opacity-70' : ''}
+            ${!targetSiteId ? 'pointer-events-none opacity-50' : ''}
           `}
+          title={!targetSiteId ? 'Create a website first — uploads are stored per site' : undefined}
         >
           {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
           {uploading ? `Uploading… ${progress}%` : 'Upload'}
-          <input type="file" accept="image/*" multiple className="hidden" onChange={handleUpload} disabled={uploading} aria-label="Upload images" />
+          <input type="file" accept="image/*" multiple className="hidden" onChange={handleUpload} disabled={uploading || !targetSiteId} aria-label="Upload images" />
         </label>
       </Reveal>
 
@@ -173,19 +232,31 @@ export function MediaLibrary({ onSelect, websiteId }) {
         <EmptyState
           icon={<ImageIcon size={30} />}
           title="No media yet"
-          description="Upload images to use them across your sites."
+          description={
+            !websiteId && sites.length === 0
+              ? 'Media is stored per website — create a site, then upload images from here.'
+              : 'Upload images to use them across your sites.'
+          }
           action={
-            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-primary-300 px-4 py-2 text-sm font-semibold text-primary-600 transition hover:bg-primary-50 dark:text-primary-300 dark:hover:bg-primary-950/40">
-              <Upload size={16} /> Choose files
-              <input type="file" accept="image/*" multiple className="hidden" onChange={handleUpload} disabled={uploading} />
-            </label>
+            targetSiteId ? (
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-primary-300 px-4 py-2 text-sm font-semibold text-primary-600 transition hover:bg-primary-50 dark:text-primary-300 dark:hover:bg-primary-950/40">
+                <Upload size={16} /> Choose files
+                <input type="file" accept="image/*" multiple className="hidden" onChange={handleUpload} disabled={uploading} />
+              </label>
+            ) : null
           }
         />
       ) : filtered.length === 0 ? null : (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {filtered.map((m, i) => (
             <Reveal key={m._id || m.id || m.url} delay={i * 40} direction="scale">
-              <MediaTile m={m} onSelect={onSelect} onDelete={handleDelete} selectable={Boolean(onSelect)} />
+              <MediaTile
+                m={m}
+                onSelect={onSelect}
+                onDelete={handleDelete}
+                selectable={Boolean(onSelect)}
+                siteName={!websiteId && siteId === 'all' ? siteNameById.get(m.websiteId) : undefined}
+              />
             </Reveal>
           ))}
         </div>

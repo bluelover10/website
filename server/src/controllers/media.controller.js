@@ -2,10 +2,31 @@ const asyncHandler = require('../utils/asyncHandler');
 const { sendSuccess } = require('../utils/ApiResponse');
 const ApiError = require('../utils/ApiError');
 const Media = require('../models/Media');
+const Website = require('../models/Website');
+const WebsiteMember = require('../models/WebsiteMember');
 const { storeFile, removeStoredFile } = require('../services/storage.service');
 
 function websiteIdOf(req) {
   return req.params.websiteId || req.website?._id?.toString();
+}
+
+// Ids of every website the user owns or is a member of — the tenant scope for
+// unscoped media listing on the standalone /api/media alias.
+async function accessibleWebsiteIds(userId) {
+  const [owned, memberships] = await Promise.all([
+    Website.find({ owner: userId }).select('_id').lean(),
+    WebsiteMember.find({ userId }).select('websiteId').lean(),
+  ]);
+  const ids = owned.map((w) => w._id);
+  const seen = new Set(ids.map(String));
+  for (const m of memberships) {
+    const key = String(m.websiteId);
+    if (!seen.has(key)) {
+      seen.add(key);
+      ids.push(m.websiteId);
+    }
+  }
+  return ids;
 }
 
 const uploadMedia = asyncHandler(async (req, res) => {
@@ -44,9 +65,15 @@ const listMedia = asyncHandler(async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
   const skip = (page - 1) * limit;
+  // Scoped → the role middleware already verified access to this exact site.
+  // Unscoped (standalone alias) → tenant-scope to every site the caller can
+  // access, so other users' media is never returned.
+  const filter = websiteId
+    ? { websiteId }
+    : { websiteId: { $in: await accessibleWebsiteIds(req.user.id) } };
   const [total, items] = await Promise.all([
-    Media.countDocuments({ websiteId }),
-    Media.find({ websiteId }).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+    Media.countDocuments(filter),
+    Media.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
   ]);
   return sendSuccess(res, { media: items, total, page, limit, pages: Math.ceil(total / limit) }, 'Media fetched');
 });

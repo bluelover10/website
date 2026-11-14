@@ -70,4 +70,4 @@ const requireAdmin = asyncHandler(async (req, res, next) => {
   return next();
 });
 
-module.exports = { requireWebsiteRole, requireOwnerRole, requireAdmin };
+module.exports = { requireWebsiteRole, requireOwnerRole, requireAdmin, getWebsiteId };

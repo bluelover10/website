@@ -1,7 +1,7 @@
 const express = require('express');
 const fsp = require('fs').promises;
 const { protect } = require('../middleware/auth');
-const { requireWebsiteRole } = require('../middleware/authorize');
+const { requireWebsiteRole, getWebsiteId } = require('../middleware/authorize');
 const upload = require('../middleware/upload');
 const mediaController = require('../controllers/media.controller');
 
@@ -28,7 +28,21 @@ function roleCheckWithCleanup(allowedRoles) {
   };
 }
 
-router.get('/', protect, requireWebsiteRole(['owner', 'editor', 'viewer']), mediaController.listMedia);
+// GET serves two modes:
+// - websiteId scoped (nested /websites/:websiteId/media mount or ?websiteId=)
+//   → strict per-site role check, as everywhere else.
+// - unscoped (standalone /api/media alias, used by the dashboard media library)
+//   → no site is addressed, so there is nothing to role-check here; listMedia
+//   tenant-scopes the query to every site the caller owns or is a member of.
+router.get(
+  '/',
+  protect,
+  (req, res, next) => {
+    if (!getWebsiteId(req)) return next();
+    requireWebsiteRole(['owner', 'editor', 'viewer'])(req, res, next);
+  },
+  mediaController.listMedia
+);
 router.post(
   '/',
   protect,
