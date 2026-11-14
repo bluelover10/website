@@ -4,7 +4,7 @@
 // Keyboard: Ctrl+Z / Ctrl+Shift+Z / Ctrl+C / Ctrl+V / Ctrl+D / Delete.
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { LayoutGrid, Files, Palette, History } from 'lucide-react';
+import { LayoutGrid, Files, Palette, History, SlidersHorizontal } from 'lucide-react';
 import { useEditorStore } from '../store/editorStore';
 import { useWebsiteStore } from '../store/websiteStore';
 import { useUiStore } from '../store/uiStore';
@@ -24,17 +24,24 @@ const TABS = [
   { id: 'versions', label: 'History', icon: History },
 ];
 
+// Stable fallback while the website (and its theme) is still loading — a fresh
+// `{}` per render would break Renderer's memo and re-render the whole canvas.
+const EMPTY_THEME = {};
+
 export default function Editor() {
   // shell route param is :id
   const { id: websiteId } = useParams();
   const [tab, setTab] = useState('components');
   const [loading, setLoading] = useState(true);
+  // Mobile (< lg) panel drawers: 'left' | 'right' | null. On small screens the
+  // canvas takes the full width; the rail/inspector slide over it.
+  const [mobilePanel, setMobilePanel] = useState(null);
 
   const pages = useEditorStore((s) => s.pages);
   const activePageId = useEditorStore((s) => s.activePageId);
   const fetchWebsite = useWebsiteStore((s) => s.fetchWebsite);
   const pushToast = useUiStore((s) => s.pushToast);
-  const theme = useWebsiteStore((s) => s.currentWebsite?.theme) || {};
+  const theme = useWebsiteStore((s) => s.currentWebsite?.theme) || EMPTY_THEME;
   const website = useWebsiteStore((s) => s.currentWebsite);
 
   useAutosave(1500);
@@ -44,7 +51,10 @@ export default function Editor() {
     (async () => {
       setLoading(true);
       try {
-        await fetchWebsite(websiteId).catch(() => null);
+        const site = await fetchWebsite(websiteId).catch(() => null);
+        if (!site && mounted) {
+          pushToast({ message: 'Could not load this website', type: 'error' });
+        }
         const list = await pageService.listByWebsite(websiteId);
         if (!mounted) return;
         const arr = Array.isArray(list) ? list : [];
@@ -69,12 +79,17 @@ export default function Editor() {
   // keyboard shortcuts
   useEffect(() => {
     const onKey = (e) => {
+      // Escape closes the mobile panel drawers (checked before anything else).
+      if (e.key === 'Escape') { setMobilePanel(null); return; }
+      const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '') || document.activeElement?.isContentEditable;
+      // MUST come before the mod+z / mod+y branches: inside inputs/textareas the
+      // browser's native undo/redo must stay untouched (previously Ctrl+Z here
+      // hijacked text undo in the properties panel).
+      if (typing) return;
       const mod = e.ctrlKey || e.metaKey;
       const st = useEditorStore.getState();
-      const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '') || document.activeElement?.isContentEditable;
       if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); st.undo(); }
       else if ((mod && e.key.toLowerCase() === 'y') || (mod && e.shiftKey && e.key.toLowerCase() === 'z')) { e.preventDefault(); st.redo(); }
-      else if (typing) return;
       else if (mod && e.key.toLowerCase() === 'c') { if (st.selectedId) { e.preventDefault(); st.copyNode(st.selectedId); } }
       else if (mod && e.key.toLowerCase() === 'v') { e.preventDefault(); st.pasteNode(); }
       else if (mod && e.key.toLowerCase() === 'd') { if (st.selectedId) { e.preventDefault(); st.duplicateNode(st.selectedId); } }
@@ -98,10 +113,23 @@ export default function Editor() {
   }
 
   return (
-    <div className="flex h-full min-h-0" onClick={() => useEditorStore.getState().select(null)}>
-      {/* left rail */}
+    <div className="relative flex h-full min-h-0" onClick={() => useEditorStore.getState().select(null)}>
+      {/* mobile backdrop for the panel drawers */}
+      {mobilePanel && (
+        <div
+          className="absolute inset-0 z-30 bg-slate-900/40 backdrop-blur-[2px] lg:hidden"
+          onClick={() => setMobilePanel(null)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* left rail — overlay drawer below lg, static column on lg+ */}
       <aside
-        className="flex w-72 min-h-0 shrink-0 flex-col border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-surface-inv2"
+        className={`flex w-72 min-h-0 flex-col border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-surface-inv2 ${
+          mobilePanel === 'left'
+            ? 'absolute inset-y-0 left-0 z-40 shadow-2xl'
+            : 'hidden lg:flex lg:shrink-0'
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex shrink-0 gap-1 border-b border-slate-200 p-1.5 dark:border-slate-800" role="tablist" aria-label="Editor panels">
@@ -145,14 +173,38 @@ export default function Editor() {
         <EditorCanvas website={website} pages={pages} theme={theme} />
       </div>
 
-      {/* right inspector */}
+      {/* right inspector — overlay drawer below lg, static column on lg+ */}
       <aside
-        className="hidden w-72 min-h-0 shrink-0 flex-col border-l border-slate-200 bg-white lg:flex dark:border-slate-800 dark:bg-surface-inv2"
+        className={`w-72 min-h-0 flex-col border-l border-slate-200 bg-white dark:border-slate-800 dark:bg-surface-inv2 ${
+          mobilePanel === 'right'
+            ? 'absolute inset-y-0 right-0 z-40 flex shadow-2xl'
+            : 'hidden lg:flex lg:shrink-0'
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="border-b border-slate-100 px-3 py-2.5 text-2xs font-bold uppercase tracking-wider text-slate-400 dark:border-slate-800">Properties</div>
         <div className="min-h-0 flex-1"><RightPanel /></div>
       </aside>
+
+      {/* mobile panel toggles (bottom corners, thumb-reachable, ≥44px targets) */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-4 z-20 flex items-end justify-between px-4 lg:hidden">
+        <button
+          onClick={(e) => { e.stopPropagation(); setMobilePanel(mobilePanel === 'left' ? null : 'left'); }}
+          aria-label="Open blocks, pages and theme panel"
+          aria-expanded={mobilePanel === 'left'}
+          className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-lg transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+        >
+          <LayoutGrid size={18} />
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); setMobilePanel(mobilePanel === 'right' ? null : 'right'); }}
+          aria-label="Open properties panel"
+          aria-expanded={mobilePanel === 'right'}
+          className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-lg transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+        >
+          <SlidersHorizontal size={18} />
+        </button>
+      </div>
     </div>
   );
 }

@@ -18,6 +18,9 @@ const userSchema = new mongoose.Schema(
   { timestamps: { createdAt: true, updatedAt: true } }
 );
 
+// Admin users list sorts by createdAt — keep it indexed.
+userSchema.index({ createdAt: -1 });
+
 userSchema.methods.toSafeJSON = function toSafeJSON() {
   const obj = this.toObject();
   delete obj.passwordHash;

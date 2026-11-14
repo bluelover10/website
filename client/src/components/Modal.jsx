@@ -7,10 +7,13 @@ const FOCUSABLE =
 
 export function Modal({ open, onClose, title, children, className, wide }) {
   const panelRef = useRef(null);
+  const restoreFocusRef = useRef(null);
 
-  // ESC to close + scroll lock while open.
+  // ESC to close + scroll lock while open. Also remembers the element that had
+  // focus before opening so it can be restored on close (focus return).
   useEffect(() => {
     if (!open) return undefined;
+    restoreFocusRef.current = document.activeElement;
     const onKey = (e) => {
       if (e.key === 'Escape') onClose?.();
     };
@@ -20,6 +23,12 @@ export function Modal({ open, onClose, title, children, className, wide }) {
     return () => {
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = prevOverflow;
+      try {
+        restoreFocusRef.current?.focus?.();
+      } catch {
+        // ignore — the trigger element may have been removed from the DOM
+      }
+      restoreFocusRef.current = null;
     };
   }, [open, onClose]);
 
@@ -65,8 +74,9 @@ export function Modal({ open, onClose, title, children, className, wide }) {
         aria-modal="true"
         aria-label={title || 'Dialog'}
         tabIndex={-1}
+        style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
         className={cn(
-          'relative w-full rounded-2xl border border-slate-200/70 bg-white p-6 shadow-pop animate-scale-in',
+          'relative max-h-[calc(100dvh-2rem)] w-full overflow-y-auto overscroll-contain rounded-2xl border border-slate-200/70 bg-white p-6 shadow-pop animate-scale-in',
           'dark:border-slate-800 dark:bg-slate-900',
           wide ? 'max-w-3xl' : 'max-w-md',
           className

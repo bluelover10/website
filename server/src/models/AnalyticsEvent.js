@@ -17,5 +17,7 @@ const analyticsEventSchema = new mongoose.Schema(
 
 analyticsEventSchema.index({ websiteId: 1, createdAt: -1 });
 analyticsEventSchema.index({ websiteId: 1, pageId: 1 });
+// Platform stats run countDocuments({ type: 'view' }) on the biggest collection.
+analyticsEventSchema.index({ type: 1, createdAt: -1 });
 
 module.exports = mongoose.model('AnalyticsEvent', analyticsEventSchema);

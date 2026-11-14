@@ -18,6 +18,9 @@ const templateSchema = new mongoose.Schema(
     thumbnail: { type: String, default: '' },
     pages: { type: [templatePageSchema], default: [] },
     isPublic: { type: Boolean, default: true, index: true },
+    // Marks rows written by the seed service — template reseeding only wipes
+    // these, never manually created public templates.
+    isSeeded: { type: Boolean, default: false },
     seedVersion: { type: Number, default: 1, index: true },
   },
   { timestamps: true }

@@ -14,13 +14,14 @@ const seoPatchSchema = z.object({
 // solid|outline|ghost).
 const themePatchSchema = z
   .object({
-    primary: z.string().optional(),
-    secondary: z.string().optional(),
-    background: z.string().optional(),
-    text: z.string().optional(),
-    accent: z.string().optional(),
-    headingFont: z.string().optional(),
-    bodyFont: z.string().optional(),
+    // Color/font strings are capped so a 2MB "theme" blob can't be stored.
+    primary: z.string().max(32).optional(),
+    secondary: z.string().max(32).optional(),
+    background: z.string().max(32).optional(),
+    text: z.string().max(32).optional(),
+    accent: z.string().max(32).optional(),
+    headingFont: z.string().max(80).optional(),
+    bodyFont: z.string().max(80).optional(),
     baseFontSize: z.number().min(10).max(32).optional(),
     baseSize: z.number().min(10).max(32).optional(),
     containerWidth: z.number().min(320).max(2000).optional(),

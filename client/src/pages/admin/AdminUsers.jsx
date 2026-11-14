@@ -24,11 +24,18 @@ export function AdminUsers() {
   const [page, setPage] = useState(1);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  // Bumped to remount the per-row role <select> and snap its DOM value back
+  // after a cancelled confirm (a controlled select keeps the user's pick otherwise).
+  const [selectKey, setSelectKey] = useState(0);
   const debounceRef = useRef(null);
+  // Accounts can arrive as either _id or id shapes — compare normalized.
+  const myId = String(me?._id || me?.id || '');
 
   const fetchUsers = useCallback(
     async (opts = {}) => {
       setLoading(true);
+      setError(null);
       try {
         const params = { page: opts.page ?? page, limit: 20 };
         if ((opts.search ?? search).trim()) params.search = (opts.search ?? search).trim();
@@ -36,6 +43,7 @@ export function AdminUsers() {
         const res = await adminService.users(params);
         setData(res);
       } catch (e) {
+        setError(e);
         pushToast({ message: e.message, type: 'error' });
       } finally {
         setLoading(false);
@@ -57,27 +65,31 @@ export function AdminUsers() {
 
   useEffect(() => () => clearTimeout(debounceRef.current), []);
 
-  const changeRole = (user, nextRole) => {
+  const changeRole = async (user, nextRole) => {
     if (nextRole === user.role) return;
     const toAdmin = nextRole === 'admin';
-    askConfirm({
+    const ok = await askConfirm({
       title: toAdmin ? `Promote ${user.name || user.email}?` : `Demote ${user.name || user.email}?`,
       message: toAdmin
         ? 'Admins can view and delete ANY site and manage ALL accounts. Only promote people you trust.'
         : 'This account will lose all admin powers.',
       danger: !toAdmin,
       confirmLabel: toAdmin ? 'Promote to admin' : 'Demote',
-      onConfirm: async () => {
-        try {
-          await adminService.updateUserRole(user._id, nextRole);
-          pushToast({ message: 'Role updated', type: 'success' });
-          fetchUsers();
-        } catch (e) {
-          pushToast({ message: e.message, type: 'error' });
-          fetchUsers();
-        }
-      },
     });
+    if (!ok) {
+      // Cancelled: the native select already shows the unconfirmed role —
+      // remount it so the UI matches the role the server actually has.
+      setSelectKey((k) => k + 1);
+      return;
+    }
+    try {
+      await adminService.updateUserRole(user._id, nextRole);
+      pushToast({ message: 'Role updated', type: 'success' });
+      fetchUsers();
+    } catch (e) {
+      pushToast({ message: e.message, type: 'error' });
+      fetchUsers();
+    }
   };
 
   const users = data?.users || [];
@@ -93,7 +105,7 @@ export function AdminUsers() {
             <Badge variant="primary"><ShieldCheck size={12} /> Admin</Badge>
           </h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            {loading ? 'Loading…' : `${total} account${total === 1 ? '' : 's'} on the platform.`}
+            {loading ? 'Loading…' : error ? 'Could not load accounts.' : `${total} account${total === 1 ? '' : 's'} on the platform.`}
           </p>
         </div>
       </Reveal>
@@ -128,6 +140,16 @@ export function AdminUsers() {
           {/* Rows */}
           {loading && !data ? (
             <SkeletonText lines={5} className="mt-4" />
+          ) : error ? (
+            <div
+              role="alert"
+              className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300"
+            >
+              <span>{error.message}</span>
+              <Button size="sm" variant="outline" onClick={() => fetchUsers()}>
+                Retry
+              </Button>
+            </div>
           ) : users.length === 0 ? (
             <EmptyState
               icon={<Users size={28} />}
@@ -137,7 +159,8 @@ export function AdminUsers() {
           ) : (
             <ul className="mt-3 divide-y divide-slate-100 dark:divide-slate-800">
               {users.map((u, i) => {
-                const isSelf = me?._id === u._id || me?.id === u._id;
+                const uid = String(u?._id || u?.id || '');
+                const isSelf = Boolean(myId && uid && myId === uid);
                 return (
                   <li
                     key={u._id}
@@ -163,6 +186,7 @@ export function AdminUsers() {
                       <span className="w-[104px] text-center text-2xs text-slate-400">Protected</span>
                     ) : (
                       <select
+                        key={selectKey}
                         value={u.role}
                         onChange={(e) => changeRole(u, e.target.value)}
                         className="sf-input w-[104px] py-1.5 text-xs"

@@ -3,11 +3,13 @@
 import React, { useEffect, useState } from 'react';
 import { History, RotateCcw, Camera, Loader2 } from 'lucide-react';
 import { useEditorStore } from '../store/editorStore';
+import { useWebsiteStore } from '../store/websiteStore';
 import { useUiStore } from '../store/uiStore';
-import { getVersions, createVersion, restoreVersion } from '../services/page.service';
+import { getVersions, createVersion, restoreVersion, getPage, updatePage } from '../services/page.service';
+import { flushAutosave } from '../hooks/useAutosave';
 
 export default function VersionsPanel({ websiteId, pageId }) {
-  const setTree = useEditorStore((s) => s.setTree);
+  const loadPageContent = useEditorStore((s) => s.loadPageContent);
   const [versions, setVersions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -36,19 +38,45 @@ export default function VersionsPanel({ websiteId, pageId }) {
   const restore = async (v) => {
     const ok = await askConfirm({
       title: 'Restore version?',
-      message: 'This replaces the canvas with the selected snapshot. Your current content is snapshotted first, so this can be undone via history.',
+      message: 'Your current draft is saved first, then the canvas is replaced with the selected snapshot. The pre-restore state is snapshotted, so you can restore back if needed.',
       confirmLabel: 'Restore',
     });
     if (!ok) return;
     setBusy(true);
     try {
-      // Snapshot current state first (so the restore itself is undoable), then restore.
+      // 1. Persist unsaved canvas edits BEFORE snapshotting, so the pre-restore
+      //    snapshot on the server actually contains them (otherwise they'd be
+      //    lost the moment the restored content lands).
+      await flushAutosave?.();
+      const st = useEditorStore.getState();
+      if (st.dirty && st.activePageId) {
+        const site = useWebsiteStore.getState().currentWebsite;
+        const wid = site?._id || site?.id;
+        if (wid) {
+          try { await updatePage(wid, st.activePageId, { content: st.tree }); } catch { /* snapshot below still protects server state */ }
+        }
+      }
+      // 2. Snapshot current state (so the restore itself is revertible).
       await createVersion(websiteId, pageId);
-      const res = await restoreVersion(websiteId, pageId, v.versionNumber ?? v.version_number);
-      const content = res?.content || res?.page?.content || res;
-      if (content && content.id) setTree(content, { history: true });
+      // 3. Restore on the server…
+      await restoreVersion(websiteId, pageId, v.versionNumber ?? v.version_number);
+      // 4. …then re-fetch the page detail so canvas === server regardless of
+      //    response shape (the old res?.content guessing was fragile).
+      let restoredOk = false;
+      try {
+        const detail = await getPage(websiteId, pageId);
+        const fresh = detail?.page || detail;
+        if (fresh?.content && typeof fresh.content === 'object') {
+          loadPageContent(pageId, fresh.content);
+          restoredOk = true;
+        }
+      } catch { /* fall through to stale warning */ }
+      if (!restoredOk) {
+        pushToast({ message: 'Restored on the server, but the canvas could not refresh — reload the editor to see it', type: 'error', duration: 6000 });
+      } else {
+        pushToast({ message: 'Version restored', type: 'success' });
+      }
       await load();
-      pushToast({ message: 'Version restored', type: 'success' });
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
 

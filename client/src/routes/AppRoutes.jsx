@@ -28,6 +28,15 @@ const AdminDashboard = lazy(() => import('../pages/admin/AdminDashboard.jsx'));
 const AdminUsers = lazy(() => import('../pages/admin/AdminUsers.jsx'));
 const AdminWebsites = lazy(() => import('../pages/admin/AdminWebsites.jsx'));
 
+// Suspense boundary for lazy pages inside a layout route. It must wrap the
+// layout's outlet CONTENT, not sit above <Routes>: a single outer boundary
+// makes the whole tree (sidebar, topbar included) unmount to a full-page
+// spinner on every cross-page navigation. With this, the layout stays mounted
+// and only the content area shows <PageSpinner /> while the chunk loads.
+function SuspenseOutlet({ children }) {
+  return <Suspense fallback={<PageSpinner />}>{children}</Suspense>;
+}
+
 export function ProtectedRoute() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const location = useLocation();
@@ -58,32 +67,32 @@ export function AppRoutes() {
         <Route path="/site/:slug" element={<PublicSite />} />
         <Route path="/site/:slug/:pageSlug" element={<PublicSite />} />
         <Route element={<AuthLayout />}>
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
+          <Route path="/login" element={<SuspenseOutlet><Login /></SuspenseOutlet>} />
+          <Route path="/register" element={<SuspenseOutlet><Register /></SuspenseOutlet>} />
         </Route>
 
         {/* Protected */}
         <Route element={<ProtectedRoute />}>
           <Route element={<DashboardLayout />}>
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/websites" element={<Websites />} />
-            <Route path="/websites/new" element={<CreateWebsite />} />
-            <Route path="/templates" element={<Templates />} />
-            <Route path="/media" element={<MediaLibrary />} />
-            <Route path="/websites/:id/settings" element={<SiteSettings />} />
-            <Route path="/websites/:id/submissions" element={<Submissions />} />
-            <Route path="/websites/:id/analytics" element={<Analytics />} />
-            <Route path="/websites/:id/team" element={<Team />} />
-            <Route path="/settings" element={<SiteSettings />} />
+            <Route path="/dashboard" element={<SuspenseOutlet><Dashboard /></SuspenseOutlet>} />
+            <Route path="/websites" element={<SuspenseOutlet><Websites /></SuspenseOutlet>} />
+            <Route path="/websites/new" element={<SuspenseOutlet><CreateWebsite /></SuspenseOutlet>} />
+            <Route path="/templates" element={<SuspenseOutlet><Templates /></SuspenseOutlet>} />
+            <Route path="/media" element={<SuspenseOutlet><MediaLibrary /></SuspenseOutlet>} />
+            <Route path="/websites/:id/settings" element={<SuspenseOutlet><SiteSettings /></SuspenseOutlet>} />
+            <Route path="/websites/:id/submissions" element={<SuspenseOutlet><Submissions /></SuspenseOutlet>} />
+            <Route path="/websites/:id/analytics" element={<SuspenseOutlet><Analytics /></SuspenseOutlet>} />
+            <Route path="/websites/:id/team" element={<SuspenseOutlet><Team /></SuspenseOutlet>} />
+            <Route path="/settings" element={<SuspenseOutlet><SiteSettings /></SuspenseOutlet>} />
             {/* Platform admin — account role, double-enforced server-side */}
             <Route element={<AdminRoute />}>
-              <Route path="/admin" element={<AdminDashboard />} />
-              <Route path="/admin/users" element={<AdminUsers />} />
-              <Route path="/admin/websites" element={<AdminWebsites />} />
+              <Route path="/admin" element={<SuspenseOutlet><AdminDashboard /></SuspenseOutlet>} />
+              <Route path="/admin/users" element={<SuspenseOutlet><AdminUsers /></SuspenseOutlet>} />
+              <Route path="/admin/websites" element={<SuspenseOutlet><AdminWebsites /></SuspenseOutlet>} />
             </Route>
           </Route>
           <Route element={<EditorLayout />}>
-            <Route path="/websites/:id/edit" element={<Editor />} />
+            <Route path="/websites/:id/edit" element={<SuspenseOutlet><Editor /></SuspenseOutlet>} />
           </Route>
           <Route path="/websites/:id/preview" element={<Preview />} />
         </Route>

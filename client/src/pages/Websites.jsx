@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Globe, Plus, Search, Pencil, Copy, Trash2, ExternalLink, Settings, Rocket } from 'lucide-react';
+import { Globe, Plus, Search, Pencil, Copy, Trash2, ExternalLink, Settings, Rocket, Inbox, BarChart3, Users } from 'lucide-react';
 import useWebsiteStore from '../store/websiteStore.js';
 import useUiStore from '../store/uiStore.js';
 import { Select } from '../components/Input.jsx';
 import Card from '../components/Card.jsx';
-import Button from '../components/Button.jsx';
+import Button, { ButtonLink } from '../components/Button.jsx';
 import Badge from '../components/Badge.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import Reveal from '../components/Reveal.jsx';
@@ -33,10 +33,18 @@ function siteTint(seed = '') {
   return palette[h % palette.length];
 }
 
+// Per-site feature routes that had no entry point anywhere in the UI.
+const siteQuickLinks = [
+  { to: 'submissions', label: 'Form submissions', icon: Inbox },
+  { to: 'analytics', label: 'Analytics', icon: BarChart3 },
+  { to: 'team', label: 'Team', icon: Users },
+];
+
 export function Websites() {
   const navigate = useNavigate();
   const websites = useWebsiteStore((s) => s.websites);
   const loading = useWebsiteStore((s) => s.loading);
+  const error = useWebsiteStore((s) => s.error);
   const fetchWebsites = useWebsiteStore((s) => s.fetchWebsites);
   const duplicateWebsite = useWebsiteStore((s) => s.duplicateWebsite);
   const deleteWebsite = useWebsiteStore((s) => s.deleteWebsite);
@@ -47,8 +55,14 @@ export function Websites() {
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState('all');
 
-  useEffect(() => {
+  const load = () => {
+    // Failures land in the store as `error`; caught here to avoid unhandled rejections.
     fetchWebsites().catch(() => {});
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchWebsites]);
 
   const filtered = useMemo(() => {
@@ -72,6 +86,17 @@ export function Websites() {
         <Button variant="gradient" onClick={() => navigate('/websites/new')}><Plus size={16} /> New site</Button>
       </Reveal>
 
+      {/* Load failure — never render zeros/empty states as if they were real */}
+      {error && !loading && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/50 dark:bg-red-950/40"
+        >
+          <p className="text-sm font-medium text-red-700 dark:text-red-300">Could not load your sites.</p>
+          <Button size="sm" variant="outline" onClick={load}>Retry</Button>
+        </div>
+      )}
+
       {/* Search + filter */}
       <Reveal delay={80} className="flex flex-col gap-2 sm:flex-row">
         <div className="relative flex-1">
@@ -91,14 +116,14 @@ export function Websites() {
 
       {loading ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{[0, 1, 2].map((i) => <SkeletonCard key={i} />)}</div>
-      ) : filtered.length === 0 ? (
+      ) : filtered.length === 0 && !error ? (
         <EmptyState
           icon={<Globe size={30} />}
           title={websites.length ? 'No matching sites' : 'No sites yet'}
           description={websites.length ? 'Try a different search or filter.' : 'Spin up a blank canvas or pick a template to get going.'}
           action={<Button variant="gradient" onClick={() => navigate('/websites/new')}><Plus size={16} /> Create site</Button>}
         />
-      ) : (
+      ) : filtered.length === 0 ? null : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((site, i) => {
             const siteId = site._id || site.id;
@@ -122,6 +147,18 @@ export function Websites() {
                       <Button size="xs" variant="ghost" onClick={() => navigate(`/websites/${siteId}/preview`)}><ExternalLink size={12} /> Preview</Button>
                       <Button size="xs" variant="ghost" onClick={() => navigate(`/websites/${siteId}/settings`)}><Settings size={12} /> Settings</Button>
                       <span className="flex-1" />
+                      {siteQuickLinks.map(({ to, label, icon: Icon }) => (
+                        <ButtonLink
+                          key={to}
+                          to={`/websites/${siteId}/${to}`}
+                          size="xs"
+                          variant="ghost"
+                          aria-label={label}
+                          title={label}
+                        >
+                          <Icon size={12} />
+                        </ButtonLink>
+                      ))}
                       <Button size="xs" variant="ghost" onClick={async () => { try { await duplicateWebsite(siteId); pushToast({ message: 'Duplicated', type: 'success' }); } catch (e) { pushToast({ message: e.message, type: 'error' }); } }} aria-label={`Duplicate ${site.name}`}><Copy size={12} /></Button>
                       <Button size="xs" variant="ghost" onClick={() => askConfirm({ title: 'Delete site?', message: `“${site.name}” will be permanently deleted.`, danger: true, confirmLabel: 'Delete', onConfirm: async () => { try { await deleteWebsite(siteId); pushToast({ message: 'Deleted', type: 'success' }); } catch (e) { pushToast({ message: e.message, type: 'error' }); } } })} aria-label={`Delete ${site.name}`} className="hover:text-red-600"><Trash2 size={12} /></Button>
                     </div>

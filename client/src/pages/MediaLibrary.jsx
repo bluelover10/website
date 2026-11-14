@@ -37,20 +37,24 @@ function MediaTile({ m, onSelect, onDelete, selectable }) {
 }
 
 export function MediaLibrary({ onSelect, websiteId }) {
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB — keep in sync with the server limit
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [q, setQ] = useState('');
   const pushToast = useUiStore((s) => s.pushToast);
   const askConfirm = useUiStore((s) => s.askConfirm);
 
   const load = async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await mediaService.list(websiteId ? { websiteId } : {});
       setItems(Array.isArray(res) ? res : res?.items || res?.media || []);
-    } catch {
-      // keep empty
+    } catch (e) {
+      setError(e?.message || 'Could not load your media.');
     } finally {
       setLoading(false);
     }
@@ -62,19 +66,42 @@ export function MediaLibrary({ onSelect, websiteId }) {
   }, [websiteId]);
 
   const handleUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!files.length) return;
+    // Client-side guards before any POST: images only, <= 5MB each.
+    const valid = [];
+    for (const file of files) {
+      if (!file.type.startsWith('image/')) {
+        pushToast({ message: `“${file.name}” is not an image.`, type: 'error' });
+        continue;
+      }
+      if (file.size > MAX_FILE_SIZE) {
+        pushToast({ message: `“${file.name}” is larger than 5MB.`, type: 'error' });
+        continue;
+      }
+      valid.push(file);
+    }
+    if (!valid.length) return;
     setUploading(true);
     try {
-      const uploaded = await mediaService.upload(file, websiteId ? { websiteId } : {});
-      const entry = uploaded?.file || uploaded;
-      if (entry) setItems((s) => [entry, ...s]);
-      pushToast({ message: 'Uploaded', type: 'success' });
+      // Sequential uploads so each file's progress reads cleanly on the button.
+      for (const file of valid) {
+        setProgress(0);
+        const uploaded = await mediaService.upload(
+          file,
+          websiteId ? { websiteId } : {},
+          (fraction) => setProgress(Math.round(fraction * 100))
+        );
+        const entry = uploaded?.file || uploaded;
+        if (entry) setItems((s) => [entry, ...s]);
+        pushToast({ message: `Uploaded ${file.name}`, type: 'success' });
+      }
     } catch (err) {
       pushToast({ message: err.message, type: 'error' });
     } finally {
       setUploading(false);
-      e.target.value = '';
+      setProgress(0);
     }
   };
 
@@ -108,6 +135,17 @@ export function MediaLibrary({ onSelect, websiteId }) {
         </Reveal>
       )}
 
+      {/* Load failure — an empty grid here would look like "no media" */}
+      {error && !loading && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/50 dark:bg-red-950/40"
+        >
+          <p className="text-sm font-medium text-red-700 dark:text-red-300">Could not load your media.</p>
+          <Button size="sm" variant="outline" onClick={load}>Retry</Button>
+        </div>
+      )}
+
       <Reveal delay={80} className="flex flex-col gap-2 sm:flex-row">
         <div className="relative flex-1">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -122,8 +160,8 @@ export function MediaLibrary({ onSelect, websiteId }) {
           `}
         >
           {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-          {uploading ? 'Uploading…' : 'Upload'}
-          <input type="file" accept="image/*" className="hidden" onChange={handleUpload} disabled={uploading} aria-label="Upload image" />
+          {uploading ? `Uploading… ${progress}%` : 'Upload'}
+          <input type="file" accept="image/*" multiple className="hidden" onChange={handleUpload} disabled={uploading} aria-label="Upload images" />
         </label>
       </Reveal>
 
@@ -131,19 +169,19 @@ export function MediaLibrary({ onSelect, websiteId }) {
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => <div key={i} className="sf-skeleton h-44" />)}
         </div>
-      ) : filtered.length === 0 ? (
+      ) : filtered.length === 0 && !error ? (
         <EmptyState
           icon={<ImageIcon size={30} />}
           title="No media yet"
           description="Upload images to use them across your sites."
           action={
             <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-primary-300 px-4 py-2 text-sm font-semibold text-primary-600 transition hover:bg-primary-50 dark:text-primary-300 dark:hover:bg-primary-950/40">
-              <Upload size={16} /> Choose a file
-              <input type="file" accept="image/*" className="hidden" onChange={handleUpload} disabled={uploading} />
+              <Upload size={16} /> Choose files
+              <input type="file" accept="image/*" multiple className="hidden" onChange={handleUpload} disabled={uploading} />
             </label>
           }
         />
-      ) : (
+      ) : filtered.length === 0 ? null : (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {filtered.map((m, i) => (
             <Reveal key={m._id || m.id || m.url} delay={i * 40} direction="scale">

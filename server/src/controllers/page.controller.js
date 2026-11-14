@@ -55,7 +55,7 @@ const updatePage = asyncHandler(async (req, res) => {
   const page = await Page.findOne({ _id: req.params.pageId, websiteId });
   if (!page) throw new ApiError(404, 'Page not found', 'PAGE_NOT_FOUND');
 
-  const { title, slug, path, content, publishedContent, seo, order, isHome, createVersion: forceVersion } = req.body;
+  const { title, slug, path, content, seo, order, isHome, createVersion: forceVersion } = req.body;
 
   // Snapshot current content before mutating (for version history)
   const contentChanged = content !== undefined && JSON.stringify(content) !== JSON.stringify(page.content);
@@ -74,7 +74,7 @@ const updatePage = asyncHandler(async (req, res) => {
   }
   if (path !== undefined) page.path = path;
   if (content !== undefined) page.content = content;
-  if (publishedContent !== undefined) page.publishedContent = publishedContent;
+  // publishedContent is publish-flow-managed only (snapshot isolation).
   if (seo !== undefined) page.seo = { ...page.seo.toObject(), ...seo };
   if (order !== undefined) page.order = order;
   if (isHome !== undefined) page.isHome = Boolean(isHome);

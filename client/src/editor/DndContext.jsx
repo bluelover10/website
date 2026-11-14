@@ -1,12 +1,15 @@
 import React, { useMemo, useState } from 'react';
-import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, closestCenter, DragOverlay } from '@dnd-kit/core';
+import { DndContext, PointerSensor, TouchSensor, KeyboardSensor, useSensor, useSensors, closestCenter, DragOverlay } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { useEditorStore } from '../store/editorStore';
 import { createNode } from '../utils/componentDefaults';
+import { nearestContainerId } from './EditorUtils';
 
 export function useEditorSensors() {
   return useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    // Touch needs a hold so page scrolling still works on mobile.
+    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 }
@@ -19,7 +22,10 @@ export function editorDragEnd(event, store) {
   if (aData && (aData.type === 'palette' || aData.nodeType)) {
     const nodeType = aData.nodeType || aData.componentType;
     if (!nodeType) return;
-    st.addNode(over.id, createNode(nodeType));
+    // Drops onto a leaf (heading/text/…) would create invisible children —
+    // resolve the nearest real container (or root) to parent the new node.
+    const containerId = nearestContainerId(st.tree, over.id);
+    st.addNode(containerId, createNode(nodeType));
     return;
   }
   if (active.id !== over.id) st.moveNode(active.id, over.id);

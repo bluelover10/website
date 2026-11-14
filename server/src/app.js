@@ -3,6 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
+const compression = require('compression');
 const cookieParser = require('cookie-parser');
 const path = require('path');
 
@@ -21,7 +22,13 @@ const adminRoutes = require('./routes/admin.routes');
 
 const app = express();
 
-app.set('trust proxy', 1);
+// Honor X-Forwarded-For ONLY behind a trusted reverse proxy (set TRUST_PROXY=1
+// in the deployment where nginx fronts this API). Leaving it off by default
+// prevents header spoofing when the API port is reachable directly.
+if (process.env.TRUST_PROXY === '1' || process.env.TRUST_PROXY === 'true') {
+  app.set('trust proxy', 1);
+}
+
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(
   cors({
@@ -29,9 +36,27 @@ app.use(
     credentials: true,
   })
 );
+app.use(compression());
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+
+// Strip object-shaped / $-prefixed / dotted query keys (extended query parser
+// turns ?search[$ne]=x into objects that could reach Mongo filters).
+app.use((req, res, next) => {
+  if (req.query && typeof req.query === 'object') {
+    for (const key of Object.keys(req.query)) {
+      const value = req.query[key];
+      const dangerous =
+        key.startsWith('$') ||
+        key.includes('.') ||
+        (value && typeof value === 'object' && !Array.isArray(value));
+      if (dangerous) delete req.query[key];
+    }
+  }
+  next();
+});
+
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 const apiLimiter = rateLimit({
@@ -39,15 +64,18 @@ const apiLimiter = rateLimit({
   max: 500,
   standardHeaders: true,
   legacyHeaders: false,
+  // Health checks must never be throttled (monitoring can hit /api/health).
+  skip: (req) => req.path === '/health',
 });
 app.use('/api', apiLimiter);
 
-// Static uploads
+// Static uploads — dotfiles are never served; only allowlisted, content-verified
+// image files ever reach this directory (see middleware/upload.js + media.routes).
 const uploadDirName = process.env.UPLOAD_DIR || 'uploads';
 const uploadPath = path.isAbsolute(uploadDirName)
   ? uploadDirName
   : path.join(__dirname, '..', uploadDirName);
-app.use('/uploads', express.static(uploadPath));
+app.use('/uploads', express.static(uploadPath, { dotfiles: 'ignore', index: false }));
 
 // Health
 app.get('/healthz', (req, res) => {

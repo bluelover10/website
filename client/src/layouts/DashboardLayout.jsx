@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import {
   LayoutDashboard, Globe, LayoutTemplate, Image, Settings, Menu, X,
@@ -56,10 +56,25 @@ function NavItem({ to, label, icon: Icon, onNavigate, showLabel }) {
 }
 
 export function DashboardLayout() {
-  const { sidebarOpen, toggleSidebar, mobileNavOpen, toggleMobileNav, setMobileNav, darkMode, toggleDarkMode, initTheme } = useUiStore();
-  const { user, logout } = useAuthStore();
+  // Narrow selectors only — subscribing to the whole stores re-renders the
+  // layout on every toast or unrelated state change.
+  const sidebarOpen = useUiStore((s) => s.sidebarOpen);
+  const mobileNavOpen = useUiStore((s) => s.mobileNavOpen);
+  const darkMode = useUiStore((s) => s.darkMode);
+  const toggleSidebar = useUiStore((s) => s.toggleSidebar);
+  const toggleMobileNav = useUiStore((s) => s.toggleMobileNav);
+  const setMobileNav = useUiStore((s) => s.setMobileNav);
+  const toggleDarkMode = useUiStore((s) => s.toggleDarkMode);
+  const initTheme = useUiStore((s) => s.initTheme);
+  const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
   const isAdmin = user?.role === 'admin';
   const navItems = isAdmin ? [...links, ...adminLinks] : links;
+
+  const drawerRef = useRef(null);
+  const drawerCloseRef = useRef(null);
+  const mainColumnRef = useRef(null);
+  const openerRef = useRef(null);
 
   useEffect(() => {
     initTheme();
@@ -79,6 +94,51 @@ export function DashboardLayout() {
       document.removeEventListener('keydown', onKey);
     };
   }, [mobileNavOpen, setMobileNav]);
+
+  // Mobile drawer focus management: on open, remember the opener and focus
+  // the close button; trap Tab inside the drawer; on close, restore focus.
+  useEffect(() => {
+    if (!mobileNavOpen) return undefined;
+    openerRef.current = document.activeElement;
+    drawerCloseRef.current?.focus();
+
+    const drawer = drawerRef.current;
+    if (!drawer) return undefined;
+    const onKeyDown = (e) => {
+      if (e.key !== 'Tab') return;
+      const focusables = Array.from(
+        drawer.querySelectorAll(
+          'a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        )
+      );
+      if (!focusables.length) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    drawer.addEventListener('keydown', onKeyDown);
+    return () => {
+      drawer.removeEventListener('keydown', onKeyDown);
+      const opener = openerRef.current;
+      if (opener && typeof opener.focus === 'function') opener.focus();
+    };
+  }, [mobileNavOpen]);
+
+  // Keep the page content inert while the drawer is open (React 18 has no
+  // reliable `inert` prop — set the attribute directly).
+  useEffect(() => {
+    const column = mainColumnRef.current;
+    if (!column) return undefined;
+    if (mobileNavOpen) column.setAttribute('inert', '');
+    else column.removeAttribute('inert');
+    return undefined;
+  }, [mobileNavOpen]);
 
   return (
     <div className="flex min-h-screen bg-surface-2 dark:bg-surface-inv1">
@@ -131,13 +191,13 @@ export function DashboardLayout() {
       {mobileNavOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm animate-fade-in" onClick={() => setMobileNav(false)} aria-hidden="true" />
-          <aside className="relative flex h-full w-72 flex-col border-r border-slate-200 bg-white shadow-pop animate-slide-in-left dark:border-slate-800 dark:bg-surface-inv2">
+          <aside ref={drawerRef} className="relative flex h-full w-72 flex-col border-r border-slate-200 bg-white shadow-pop animate-slide-in-left dark:border-slate-800 dark:bg-surface-inv2">
             <div className="flex h-16 items-center justify-between border-b border-slate-100 px-4 dark:border-slate-800">
               <Link to="/" className="flex items-center gap-2.5" onClick={() => setMobileNav(false)}>
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 font-display text-base font-bold text-white">S</span>
                 <span className="font-display text-lg font-bold tracking-tight">SiteForge</span>
               </Link>
-              <button onClick={() => setMobileNav(false)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Close menu">
+              <button ref={drawerCloseRef} onClick={() => setMobileNav(false)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Close menu">
                 <X size={18} />
               </button>
             </div>
@@ -167,7 +227,7 @@ export function DashboardLayout() {
       )}
 
       {/* ---------- main column ---------- */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div ref={mainColumnRef} className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 flex h-16 items-center gap-2 border-b border-slate-200/80 bg-white/80 px-4 backdrop-blur-md dark:border-slate-800 dark:bg-surface-inv2/80">
           <button
             onClick={toggleMobileNav}

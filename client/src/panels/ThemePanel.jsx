@@ -1,8 +1,9 @@
 // Global theme editor -> websiteStore.updateTheme (with direct-API fallback).
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Check, Palette } from 'lucide-react';
 import { useWebsiteStore } from '../store/websiteStore';
 import { updateWebsiteTheme } from '../services/page.service';
+import useUiStore from '../store/uiStore';
 
 const DEFAULT_THEME = {
   primary: '#5b4fd6', secondary: '#0ea5e9', background: '#ffffff', text: '#111827', accent: '#f59e0b',
@@ -11,6 +12,10 @@ const DEFAULT_THEME = {
 };
 
 const FONTS = ['Inter, system-ui, sans-serif', 'Georgia, serif', 'DM Sans, sans-serif', 'Poppins, sans-serif', 'Space Grotesk, sans-serif', 'monospace'];
+
+// Serialized save chain: network saves run one after another, so a slow or
+// out-of-order response can never clobber a newer theme.
+let saveChain = Promise.resolve();
 
 function SectionLabel({ children }) {
   return <div className="mb-2 mt-4 text-2xs font-bold uppercase tracking-wider text-slate-400 first:mt-0">{children}</div>;
@@ -21,10 +26,17 @@ function ColorRow({ label, value, onChange }) {
     <label className="mb-2 flex items-center justify-between gap-2">
       <span className="text-xs text-slate-500 dark:text-slate-400">{label}</span>
       <span className="flex items-center gap-1.5">
-        <label className="relative h-7 w-9 shrink-0 cursor-pointer overflow-hidden rounded-md border border-slate-200 dark:border-slate-700" aria-label={`Pick ${label.toLowerCase()} color`}>
+        {/* span (not label) so it can sit inside the row label without nesting */}
+        <span className="relative h-7 w-9 shrink-0 cursor-pointer overflow-hidden rounded-md border border-slate-200 dark:border-slate-700">
           <span className="absolute inset-1 rounded" style={{ background: value || '#5b4fd6' }} />
-          <input type="color" value={/^#[0-9a-fA-F]{6}$/.test(value || '') ? value : '#5b4fd6'} onChange={(e) => onChange(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" />
-        </label>
+          <input
+            type="color"
+            aria-label={`Pick ${label.toLowerCase()} color`}
+            value={/^#[0-9a-fA-F]{6}$/.test(value || '') ? value : '#5b4fd6'}
+            onChange={(e) => onChange(e.target.value)}
+            className="absolute inset-0 cursor-pointer opacity-0"
+          />
+        </span>
         <input className="w-20 rounded-md border border-slate-200 bg-white px-1.5 py-1 font-mono text-2xs dark:border-slate-700 dark:bg-slate-900" value={value || ''} onChange={(e) => onChange(e.target.value)} aria-label={`${label} hex value`} />
       </span>
     </label>
@@ -38,21 +50,50 @@ export default function ThemePanel({ websiteId, theme: themeProp }) {
   const updateThemeStore = useWebsiteStore((s) => s.updateTheme);
   const [theme, setTheme] = useState({ ...DEFAULT_THEME, ...(storeTheme || themeProp || {}) });
   const [savedTick, setSavedTick] = useState(false);
+  const saveTimerRef = useRef(null);
+  const savedTimerRef = useRef(null);
+  const aliveRef = useRef(true);
 
   useEffect(() => {
     if (storeTheme || themeProp) setTheme({ ...DEFAULT_THEME, ...(storeTheme || themeProp || {}) });
   }, [websiteId]); // eslint-disable-line
 
-  const patch = async (p) => {
+  // Reset/cleanup: drop pending debounce + saved-tick timers on unmount.
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    };
+  }, []);
+
+  const persist = (next) => {
+    saveChain = saveChain
+      .then(async () => {
+        if (!websiteId) return;
+        // websiteStore.updateTheme(id, theme) — shell contract, direct-API fallback
+        if (updateThemeStore) await updateThemeStore(websiteId, next);
+        else await updateWebsiteTheme(websiteId, next);
+        if (!aliveRef.current) return;
+        setSavedTick(true);
+        if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+        savedTimerRef.current = setTimeout(() => {
+          if (aliveRef.current) setSavedTick(false);
+        }, 1200);
+      })
+      .catch(() => {
+        useUiStore.getState().pushToast({ message: 'Theme save failed', type: 'error' });
+      });
+  };
+
+  const patch = (p) => {
+    // Edits apply instantly; the network save is debounced (500ms) + serialized.
     const next = { ...theme, ...p };
     setTheme(next);
-    try {
-      // websiteStore.updateTheme(id, theme) — shell contract
-      if (websiteId && updateThemeStore) await updateThemeStore(websiteId, next);
-      else if (websiteId) await updateWebsiteTheme(websiteId, next);
-      setSavedTick(true);
-      setTimeout(() => setSavedTick(false), 1200);
-    } catch (e) { console.warn('theme save failed', e.message); }
+    if (!websiteId) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => persist(next), 500);
   };
 
   return (

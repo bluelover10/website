@@ -1,6 +1,6 @@
 // Preview mode: draft tree via Renderer, viewport switcher, page switcher.
 // Route: /websites/:id/preview (shell). No editor chrome.
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Monitor, Tablet, Smartphone, Pencil } from 'lucide-react';
 import { Renderer } from '../editor/Renderer';
@@ -8,7 +8,9 @@ import { useEditorStore } from '../store/editorStore';
 import websiteService from '../services/website.service';
 import pageService from '../services/page.service';
 
-const WIDTHS = { desktop: '100%', tablet: '768px', mobile: '375px' };
+// min(100%, X) keeps phones/tablets from horizontally overflowing when the
+// simulated viewport is wider than the real screen.
+const WIDTHS = { desktop: '100%', tablet: 'min(100%, 768px)', mobile: 'min(100%, 375px)' };
 
 function toRoot(content) {
   if (content && content.id) return content;
@@ -55,6 +57,13 @@ export default function Preview() {
   }, [websiteId]); // eslint-disable-line
 
   const theme = website?.theme || {};
+  // The scroll container is the inner overflow-auto div (not window) — reset its
+  // scrollTop on page/viewport change so switching pages starts at the top.
+  const scrollRef = useRef(null);
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [pageId, vp]);
+
   const switchPage = async (pid) => {
     setPageId(pid);
     const pg = pages.find((p) => (p._id || p.id) === pid);
@@ -62,7 +71,6 @@ export default function Preview() {
     if (pg.content) { setTree(toRoot(pg.content)); return; }
     const detail = await pageService.get(pid, websiteId).catch(() => pg);
     setTree(toRoot(detail?.content || detail?.page?.content || pg.content));
-    window.scrollTo(0, 0);
   };
 
   return (
@@ -101,8 +109,8 @@ export default function Preview() {
           <Pencil size={13} /> Back to editor
         </Link>
       </div>
-      <div className="flex-1 overflow-auto p-4 sf-canvas sf-canvas-grid">
-        <div className="mx-auto overflow-hidden rounded-xl bg-white shadow-card ring-1 ring-black/[0.03] transition-all duration-300 ease-swift dark:bg-surface-inv2" style={{ maxWidth: WIDTHS[vp] }}>
+      <div ref={scrollRef} className="flex-1 overflow-auto p-4 sf-canvas sf-canvas-grid">
+        <div className="mx-auto overflow-hidden rounded-xl bg-white shadow-card ring-1 ring-black/[0.03] transition-all duration-300 ease-swift dark:bg-surface-inv2" style={{ width: WIDTHS[vp], maxWidth: '100%' }}>
           <Renderer tree={tree} mode="preview" theme={theme} website={website} pages={pages} navigate={(slug) => { const pg = pages.find((p) => p.slug === slug); if (pg) switchPage(pg._id || pg.id); }} />
         </div>
       </div>

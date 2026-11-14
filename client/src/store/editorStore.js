@@ -12,6 +12,31 @@ import { createNode } from '../utils/componentDefaults';
 
 const HISTORY_LIMIT = 50;
 const CLIP_KEY = 'siteforge:clipboard';
+const VIEWPORT_KEY = 'siteforge:viewport';
+const VALID_VIEWPORTS = ['desktop', 'tablet', 'mobile'];
+// History coalescing: collapse rapid edits (typing) to the same node into fewer
+// undo entries — a 50-character heading yields 1-3 entries instead of 50.
+const HISTORY_COALESCE_MS = 700;
+let lastHistory = { id: null, key: null, at: 0 };
+
+function loadStoredViewport() {
+  try {
+    const v = localStorage.getItem(VIEWPORT_KEY);
+    return VALID_VIEWPORTS.includes(v) ? v : 'desktop';
+  } catch { return 'desktop'; }
+}
+
+function persistViewport(viewport) {
+  try { localStorage.setItem(VIEWPORT_KEY, viewport); } catch { /* ignore */ }
+}
+
+// Any history-branching action (undo, page switch, structural edit) invalidates
+// the coalescing window so the next updateNode pushes a fresh past entry.
+function resetHistoryCoalesce() {
+  lastHistory = { id: null, key: null, at: 0 };
+}
+
+const initialViewport = loadStoredViewport();
 
 function pushPast(past, tree) {
   const next = [...past, cloneTree(tree)];
@@ -38,8 +63,8 @@ export const useEditorStore = create((set, get) => ({
   tree: emptyRoot(),
   content: emptyRoot(), // shell alias of tree (kept in sync)
   selectedId: null,
-  viewport: 'desktop', // desktop | tablet | mobile
-  device: 'desktop', // shell alias of viewport
+  viewport: initialViewport, // desktop | tablet | mobile (persisted to localStorage)
+  device: initialViewport, // shell alias of viewport
   isSaving: false,
   lastSaved: null,
   past: [],
@@ -53,7 +78,8 @@ export const useEditorStore = create((set, get) => ({
       let { activePageId, tree } = s;
       if (!activePageId && list.length) {
         activePageId = list[0]._id || list[0].id;
-        tree = defaultTreeForPage(list[0]);
+        // Clone so the canvas never mutates (or aliases) raw server data.
+        tree = cloneTree(defaultTreeForPage(list[0]));
       }
       return { pages: list, activePageId, currentPageId: activePageId, tree, content: cloneTree(tree) };
     }),
@@ -62,6 +88,7 @@ export const useEditorStore = create((set, get) => ({
     set((s) => {
       const page = (s.pages || []).find((p) => (p._id || p.id) === pageId);
       const tree = page ? defaultTreeForPage(page) : s.tree;
+      resetHistoryCoalesce();
       return {
         activePageId: pageId,
         currentPageId: pageId,
@@ -79,6 +106,7 @@ export const useEditorStore = create((set, get) => ({
     else if (Array.isArray(content)) tree = { id: 'root', type: 'root', props: {}, children: cloneTree(content) };
     else if (content && Array.isArray(content.children)) tree = cloneTree(content);
     set({ activePageId: pageId, currentPageId: pageId, tree, content: cloneTree(tree), dirty: false, past: [], future: [], selectedId: null });
+    resetHistoryCoalesce();
   },
 
   setTree: (tree, opts = {}) => {
@@ -96,6 +124,7 @@ export const useEditorStore = create((set, get) => ({
       if (opts.skipHistory === true) return { tree: next, content: cloneTree(next), dirty: true };
       return { tree: next, content: cloneTree(next), dirty: true };
     });
+    resetHistoryCoalesce();
   },
 
   setContent: (content, opts = {}) => get().setTree(content, opts),
@@ -106,13 +135,31 @@ export const useEditorStore = create((set, get) => ({
     if (patch && typeof patch === 'object' && (patch.props || patch.node)) {
       props = { ...(patch.props || {}), ...(patch.node?.props || {}) };
     }
-    set((s) => ({
-      tree: updateNodeDeep(s.tree, id, props),
-      content: updateNodeDeep(s.tree, id, props),
-      past: pushPast(s.past, s.tree),
-      future: [],
-      dirty: true,
-    }));
+    set((s) => {
+      // Single deep-clone pass: `next` is shared by tree/content (all mutators
+      // clone before writing, so sharing one reference is safe) and the undo
+      // history only needs the PREVIOUS tree.
+      const next = updateNodeDeep(s.tree, id, props);
+
+      // Coalesced history: rapid edits to the same node (typing in a property
+      // field) collapse into fewer undo entries. Any branching action resets
+      // the window via resetHistoryCoalesce().
+      const now = Date.now();
+      const propKey = Object.keys(props).sort().join(',');
+      const coalesce =
+        lastHistory.id === id &&
+        lastHistory.key === propKey &&
+        now - lastHistory.at < HISTORY_COALESCE_MS;
+      lastHistory = { id, key: propKey, at: now };
+
+      return {
+        tree: next,
+        content: next,
+        past: coalesce ? s.past : pushPast(s.past, s.tree),
+        future: [],
+        dirty: true,
+      };
+    });
   },
 
   addNode: (parentId, node, index) => {
@@ -135,6 +182,7 @@ export const useEditorStore = create((set, get) => ({
     return set((s) => {
       const resolved = n && n.id ? n : createNode(n?.type || 'text', n);
       const next = insertNodeDeep(s.tree, pid || 'root', resolved, at);
+      resetHistoryCoalesce();
       return {
         tree: next,
         content: cloneTree(next),
@@ -150,6 +198,7 @@ export const useEditorStore = create((set, get) => ({
     set((s) => {
       if (!id || id === 'root') return {};
       const next = removeNodeDeep(s.tree, id);
+      resetHistoryCoalesce();
       return {
         tree: next,
         content: cloneTree(next),
@@ -170,6 +219,7 @@ export const useEditorStore = create((set, get) => ({
       const siblings = parent ? parent.children || [] : s.tree.children || [];
       const idx = siblings.findIndex((c) => c.id === id);
       const next = insertNodeDeep(s.tree, parentId, copy, idx + 1);
+      resetHistoryCoalesce();
       return {
         tree: next,
         content: cloneTree(next),
@@ -185,6 +235,7 @@ export const useEditorStore = create((set, get) => ({
       if (!activeId || !overId || activeId === overId) return {};
       if (!findNode(s.tree, activeId) || (!findNode(s.tree, overId) && overId !== 'root')) return {};
       const next = moveNodeDeep(s.tree, activeId, overId);
+      resetHistoryCoalesce();
       return { tree: next, content: cloneTree(next), past: pushPast(s.past, s.tree), future: [], dirty: true };
     }),
 
@@ -222,6 +273,7 @@ export const useEditorStore = create((set, get) => ({
     set((s) => {
       if (!s.past.length) return {};
       const prev = s.past[s.past.length - 1];
+      resetHistoryCoalesce();
       return { tree: prev, content: cloneTree(prev), past: s.past.slice(0, -1), future: [cloneTree(s.tree), ...s.future].slice(0, HISTORY_LIMIT), selectedId: null, dirty: true };
     }),
 
@@ -229,13 +281,17 @@ export const useEditorStore = create((set, get) => ({
     set((s) => {
       if (!s.future.length) return {};
       const [next, ...rest] = s.future;
+      resetHistoryCoalesce();
       return { tree: next, content: cloneTree(next), past: pushPast(s.past, s.tree), future: rest, selectedId: null, dirty: true };
     }),
 
-  pushHistory: () => set((s) => ({ past: pushPast(s.past, s.tree), future: [] })),
-  clearHistory: () => set({ past: [], future: [] }),
+  pushHistory: () => { resetHistoryCoalesce(); set((s) => ({ past: pushPast(s.past, s.tree), future: [] })); },
+  clearHistory: () => { resetHistoryCoalesce(); set({ past: [], future: [] }); },
 
-  setViewport: (viewport) => set({ viewport, device: viewport }),
+  setViewport: (viewport) => {
+    persistViewport(viewport);
+    set({ viewport, device: viewport });
+  },
   setDevice: (device) => set({ device, viewport: device }),
   setDirty: (dirty) => set({ dirty: !!dirty }),
   setSaving: (isSaving, lastSaved) =>

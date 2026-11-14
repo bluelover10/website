@@ -65,6 +65,18 @@ export const useUiStore = create((set, get) => ({
   // resolves false for cancel/dismiss. Legacy onConfirm callbacks still work.
   askConfirm: (opts) =>
     new Promise((resolve) => {
+      // Overlap guard: a second askConfirm must not orphan the first promise.
+      // Resolve any pending dialog as cancelled before replacing it, so the old
+      // caller unblocks instead of hanging forever on a stale resolver.
+      if (confirmResolver) {
+        const stale = confirmResolver;
+        confirmResolver = null;
+        try {
+          stale(false);
+        } catch {
+          // ignore — resolver should never throw, but don't block the new dialog
+        }
+      }
       confirmResolver = resolve;
       set({
         confirmDialog: {

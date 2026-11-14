@@ -4,13 +4,26 @@ import formService from '../services/form.service.js';
 
 function px(v) { return typeof v === 'number' ? `${v}px` : v; }
 
-export function Button({ node }) {
+// Theme-aware muted/border values (hardcoded slate grays break dark-themed
+// published sites). --sf-* vars are always set by the Renderer wrapper.
+const MUTED = 'color-mix(in srgb, var(--sf-text) 60%, transparent)';
+const CARD_BORDER = '1px solid color-mix(in srgb, var(--sf-text) 12%, transparent)';
+const CARD_BG = 'var(--sf-background, #ffffff)';
+const TEXT = 'var(--sf-text, #111827)';
+
+export function Button({ node, mode }) {
   const p = node.props || {};
+  const edit = mode === 'edit';
   const alignMap = { left: 'flex-start', center: 'center', right: 'flex-end' };
+  const href = p.href || '#';
+  const external = /^https?:/i.test(href) || href.startsWith('//');
   return (
     <div style={{ display: 'flex', justifyContent: alignMap[p.align] || 'flex-start' }}>
       <a
-        href={p.href || '#'}
+        href={href}
+        /* Edit mode: anchor default (# href) would scroll the page — block it. */
+        onClick={edit ? (e) => e.preventDefault() : undefined}
+        {...(external && !edit ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
         style={{
           display: 'inline-block', background: p.background || 'var(--sf-primary, #5b4fd6)',
           color: p.color || '#fff', borderRadius: px(p.radius ?? 8),
@@ -24,14 +37,22 @@ export function Button({ node }) {
   );
 }
 
-export function ContactForm({ node, website }) {
+export function ContactForm({ node, website, mode }) {
   const p = node.props || {};
+  const edit = mode === 'edit';
   const [form, setForm] = useState({ name: '', email: '', message: '' });
   const [status, setStatus] = useState('idle'); // idle | sending | sent | error
   const websiteId = website?._id || website?.id;
 
+  const update = (patch) => {
+    setForm((f) => ({ ...f, ...patch }));
+    // A fresh typing session after success/error clears the stale status.
+    setStatus((s) => (s === 'sent' || s === 'error' ? 'idle' : s));
+  };
+
   const submit = async (e) => {
     e.preventDefault();
+    if (edit) return;
     if (!websiteId) { setStatus('error'); return; }
     setStatus('sending');
     try {
@@ -46,18 +67,49 @@ export function ContactForm({ node, website }) {
   };
 
   return (
-    <div style={{ background: p.background || '#fff', borderRadius: 12, padding: 32, maxWidth: 560, margin: '0 auto', border: '1px solid #e5e7eb' }}>
-      {p.title && <h3 className="text-xl font-bold mb-1" style={{ color: 'var(--sf-text, #111827)' }}>{p.title}</h3>}
-      {p.subtitle && <p className="text-sm text-slate-500 mb-4">{p.subtitle}</p>}
-      <form onSubmit={submit} className="flex flex-col gap-3">
-        <input className="sf-rendered-input" placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-        <input className="sf-rendered-input" placeholder="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
-        <textarea className="sf-rendered-input resize-y" placeholder="Message" rows={4} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} required />
-        <button type="submit" disabled={status === 'sending'} className="rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60" style={{ background: 'var(--sf-primary, #5b4fd6)' }}>
+    <div style={{ background: p.background || CARD_BG, borderRadius: 12, padding: 32, maxWidth: 560, margin: '0 auto', border: CARD_BORDER }}>
+      {p.title && <h3 className="mb-1 text-xl font-bold" style={{ color: TEXT }}>{p.title}</h3>}
+      {p.subtitle && <p className="mb-4 text-sm" style={{ color: MUTED }}>{p.subtitle}</p>}
+      <form onSubmit={submit} className="flex flex-col gap-3" noValidate={false}>
+        <input
+          className="sf-rendered-input"
+          placeholder="Name"
+          aria-label="Name"
+          autoComplete="name"
+          value={form.name}
+          onChange={(e) => update({ name: e.target.value })}
+          required
+        />
+        <input
+          className="sf-rendered-input"
+          placeholder="Email"
+          aria-label="Email"
+          type="email"
+          autoComplete="email"
+          value={form.email}
+          onChange={(e) => update({ email: e.target.value })}
+          required
+        />
+        <textarea
+          className="sf-rendered-input resize-y"
+          placeholder="Message"
+          aria-label="Message"
+          rows={4}
+          value={form.message}
+          onChange={(e) => update({ message: e.target.value })}
+          required
+        />
+        <button
+          type="submit"
+          disabled={status === 'sending' || edit}
+          className="rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
+          style={{ background: 'var(--sf-primary, #5b4fd6)' }}
+        >
           {status === 'sending' ? 'Sending…' : status === 'sent' ? 'Sent ✓' : (p.submitText || 'Send message')}
         </button>
-        {status === 'error' && <p className="text-xs text-red-600">Could not submit. Try again later.</p>}
-        {status === 'sent' && <p className="text-xs text-green-600">Thanks — we got your message.</p>}
+        {/* Announced to screen readers; role switches error/alert vs polite status */}
+        {status === 'error' && <p className="text-xs text-red-600 dark:text-red-400" role="alert">Could not submit. Try again later.</p>}
+        {status === 'sent' && <p className="text-xs text-green-600 dark:text-green-400" role="status">Thanks — we got your message.</p>}
       </form>
     </div>
   );
@@ -69,17 +121,41 @@ export function FAQ({ node }) {
   const items = Array.isArray(p.items) ? p.items : [];
   return (
     <div style={{ maxWidth: 720, margin: '0 auto' }}>
-      {p.title && <h3 className="text-2xl font-bold text-center mb-6" style={{ color: 'var(--sf-text, #111827)' }}>{p.title}</h3>}
+      {p.title && <h3 className="mb-6 text-center text-2xl font-bold" style={{ color: TEXT }}>{p.title}</h3>}
       <div className="flex flex-col gap-2">
-        {items.map((it, i) => (
-          <div key={i} className="border rounded-lg overflow-hidden" style={{ borderColor: '#e5e7eb', background: '#fff' }}>
-            <button onClick={() => setOpen(open === i ? -1 : i)} className="w-full text-left px-4 py-3 text-sm font-semibold flex justify-between items-center">
-              <span>{it.q}</span><span className="text-slate-400">{open === i ? '−' : '+'}</span>
-            </button>
-            {open === i && <div className="px-4 pb-3 text-sm text-slate-600">{it.a}</div>}
-          </div>
-        ))}
-        {items.length === 0 && <p className="text-sm text-slate-400 text-center">No questions yet</p>}
+        {items.map((it, i) => {
+          const isOpen = open === i;
+          const btnId = `faq-btn-${i}`;
+          const bodyId = `faq-body-${i}`;
+          return (
+            <div key={i} className="overflow-hidden rounded-lg" style={{ border: CARD_BORDER, background: CARD_BG }}>
+              <button
+                type="button"
+                id={btnId}
+                aria-expanded={isOpen}
+                aria-controls={bodyId}
+                onClick={() => setOpen(isOpen ? -1 : i)}
+                className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold"
+                style={{ color: TEXT }}
+              >
+                <span>{it.q}</span>
+                <span aria-hidden="true" style={{ color: MUTED }}>{isOpen ? '−' : '+'}</span>
+              </button>
+              {isOpen && (
+                <div
+                  id={bodyId}
+                  role="region"
+                  aria-labelledby={btnId}
+                  className="px-4 pb-3 text-sm"
+                  style={{ color: MUTED }}
+                >
+                  {it.a}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {items.length === 0 && <p className="text-center text-sm text-slate-400">No questions yet</p>}
       </div>
     </div>
   );

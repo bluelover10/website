@@ -30,13 +30,22 @@ export function Text({ node }) {
   );
 }
 
-export function Link({ node }) {
+export function Link({ node, mode }) {
   const p = node.props || {};
+  const edit = mode === 'edit';
+  const href = p.href || '#';
+  const external = /^https?:/i.test(href) || href.startsWith('//');
   return (
-    <a href={p.href || '#'} style={{
-      color: p.color || 'var(--sf-primary, #5b4fd6)', fontSize: px(p.fontSize ?? 16),
-      textDecoration: p.underline === false ? 'none' : 'underline',
-    }}>
+    <a
+      href={href}
+      /* Edit mode: block the anchor's default (# href scroll/navigate). */
+      onClick={edit ? (e) => e.preventDefault() : undefined}
+      {...(external && !edit ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+      style={{
+        color: p.color || 'var(--sf-primary, #5b4fd6)', fontSize: px(p.fontSize ?? 16),
+        textDecoration: p.underline === false ? 'none' : 'underline',
+      }}
+    >
       {p.text || p.content || 'Learn more'}
     </a>
   );

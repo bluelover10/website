@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { Users, Trash2, UserPlus, ShieldCheck } from 'lucide-react';
@@ -22,29 +22,32 @@ export function Team() {
   const { id: websiteId } = useParams();
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [removingId, setRemovingId] = useState(null);
   const pushToast = useUiStore((s) => s.pushToast);
+  const askConfirm = useUiStore((s) => s.askConfirm);
   const { register, handleSubmit, reset, formState: { isSubmitting } } = useForm({ defaultValues: { email: '', role: 'editor' } });
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!websiteId) {
       setLoading(false);
       return;
     }
     setLoading(true);
+    setError(null);
     try {
       const res = await memberService.listByWebsite(websiteId);
       setMembers(Array.isArray(res) ? res : res?.members || res?.items || []);
-    } catch {
-      // empty
+    } catch (e) {
+      setError(e?.message || 'Could not load your team.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [websiteId]);
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [websiteId]);
+  }, [load]);
 
   const onInvite = async (values) => {
     try {
@@ -72,12 +75,23 @@ export function Team() {
   };
 
   const removeMember = async (m) => {
+    const mid = m._id || m.id;
+    const ok = await askConfirm({
+      title: 'Remove member?',
+      message: `${m.name || m.email || 'This member'} will lose access to this site. This cannot be undone.`,
+      confirmLabel: 'Remove',
+      danger: true,
+    });
+    if (!ok) return;
+    setRemovingId(mid);
     try {
-      await memberService.remove(websiteId, m._id || m.id);
-      setMembers((s) => s.filter((x) => (x._id || x.id) !== (m._id || m.id)));
+      await memberService.remove(websiteId, mid);
+      setMembers((s) => s.filter((x) => (x._id || x.id) !== mid));
       pushToast({ message: 'Member removed', type: 'success' });
     } catch (e) {
       pushToast({ message: e.message, type: 'error' });
+    } finally {
+      setRemovingId(null);
     }
   };
 
@@ -101,7 +115,8 @@ export function Team() {
             </span>
           </CardTitle>
           <form onSubmit={handleSubmit(onInvite)} className="mt-3 flex flex-col gap-2 sm:flex-row" noValidate>
-            <Input type="email" placeholder="teammate@studio.com" autoComplete="email" {...register('email')} />
+            {/* Inline input+button row — keep it compact and label via aria instead */}
+            <Input type="email" placeholder="teammate@studio.com" autoComplete="email" aria-label="Email address" {...register('email')} />
             <Select {...register('role')} className="sm:w-36" aria-label="Member role">
               <option value="editor">Editor</option>
               <option value="viewer">Viewer</option>
@@ -111,16 +126,26 @@ export function Team() {
         </Card>
       </Reveal>
 
+      {error && !loading && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/50 dark:bg-red-950/40"
+        >
+          <p className="text-sm font-medium text-red-700 dark:text-red-300">Could not load your team.</p>
+          <Button size="sm" variant="outline" onClick={load}>Retry</Button>
+        </div>
+      )}
+
       <Reveal delay={130}>
         <Card>
           <CardTitle>Members ({members.length})</CardTitle>
           {loading ? (
             <div className="mt-4 space-y-3">{[0, 1].map((i) => <SkeletonText key={i} lines={2} />)}</div>
-          ) : members.length === 0 ? (
+          ) : members.length === 0 && !error ? (
             <div className="mt-3">
               <EmptyState icon={<Users size={28} />} title="No members yet" description="Invite your team to collaborate on this site." />
             </div>
-          ) : (
+          ) : members.length === 0 ? null : (
             <ul className="mt-3 divide-y divide-slate-100 dark:divide-slate-800">
               {members.map((m, i) => {
                 const isOwner = m.role === 'owner';
@@ -150,7 +175,12 @@ export function Team() {
                       </select>
                     )}
                     {!isOwner && (
-                      <button onClick={() => removeMember(m)} className="rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40" aria-label={`Remove ${m.name || m.email}`}>
+                      <button
+                        onClick={() => removeMember(m)}
+                        disabled={removingId === (m._id || m.id)}
+                        className="rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-950/40"
+                        aria-label={`Remove ${m.name || m.email}`}
+                      >
                         <Trash2 size={15} />
                       </button>
                     )}

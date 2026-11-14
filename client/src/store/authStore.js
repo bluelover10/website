@@ -103,4 +103,17 @@ export const useAuthStore = create((set, get) => ({
   },
 }));
 
+// Session invalidated server-side: the axios layer clears storage and
+// dispatches 'siteforge:unauthorized'. Keep the store in sync here so
+// ProtectedRoute redirects naturally (isAuthenticated flips false).
+// Registered exactly once — the window flag survives HMR re-evaluation.
+if (typeof window !== 'undefined' && !window.__siteforgeUnauthorizedBound) {
+  window.__siteforgeUnauthorizedBound = true;
+  window.addEventListener('siteforge:unauthorized', () => {
+    if (useAuthStore.getState().isAuthenticated) {
+      useAuthStore.getState().logout();
+    }
+  });
+}
+
 export default useAuthStore;

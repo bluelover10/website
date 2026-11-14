@@ -1,7 +1,7 @@
 // Public site: /site/:slug (and /site/:slug/:pageSlug).
 // Published content via GET /api/websites/slug/:slug; analytics via analyticsService.track,
 // SEO meta, page routing (?page= or sub-route), 404/loading states.
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams, useNavigate, Link } from 'react-router-dom';
 import websiteService from '../services/website.service';
 import analyticsService from '../services/analytics.service';
@@ -22,7 +22,13 @@ function toRoot(content) {
   return { id: 'root', type: 'root', props: {}, children: [] };
 }
 
+// Applies SEO meta for the current page and returns a cleanup that restores
+// the app's previous title/favicon (the SPA keeps living after /site/ visits).
 function applySeo(site, page) {
+  const prevTitle = document.title;
+  const prevFaviconEl = document.querySelector('link[rel="icon"]');
+  const prevFavicon = prevFaviconEl ? prevFaviconEl.getAttribute('href') : null;
+
   const title = page?.seoTitle || page?.title || site?.name || 'SiteForge site';
   document.title = title;
   const setMeta = (name, content, attr = 'name') => {
@@ -34,11 +40,29 @@ function applySeo(site, page) {
   setMeta('description', page?.seoDescription || site?.description || '');
   setMeta('og:title', title, 'property');
   setMeta('og:description', page?.seoDescription || site?.description || '', 'property');
+  // Social cards need og:image + twitter:card, otherwise link previews render
+  // bare text even when the site has imagery configured.
+  const ogImage = page?.seoOgImage || site?.seo?.ogImage || site?.ogImage || '';
+  if (ogImage) {
+    setMeta('og:image', ogImage, 'property');
+    setMeta('twitter:card', 'summary_large_image');
+    setMeta('twitter:image', ogImage);
+  }
   if (site?.favicon) {
     let link = document.querySelector('link[rel="icon"]');
     if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
     link.href = site.favicon;
   }
+  return () => {
+    document.title = prevTitle;
+    try {
+      const link = document.querySelector('link[rel="icon"]');
+      if (link) {
+        if (prevFavicon) link.setAttribute('href', prevFavicon);
+        else link.remove();
+      }
+    } catch { /* ignore */ }
+  };
 }
 
 export default function PublicSite() {
@@ -72,11 +96,19 @@ export default function PublicSite() {
   const websiteId = site?._id || site?.id;
 
   useEffect(() => {
-    if (site) applySeo(site, page);
+    if (!site) return undefined;
+    const cleanup = applySeo(site, page);
+    return cleanup;
   }, [site, page?.slug]); // eslint-disable-line
 
+  // StrictMode dev double-invoke and re-renders must not double-count views:
+  // one track per websiteId+page per visit to this component.
+  const trackedRef = useRef(null);
   useEffect(() => {
     if (!websiteId || !page) return;
+    const key = `${websiteId}:${page._id || page.id}`;
+    if (trackedRef.current === key) return;
+    trackedRef.current = key;
     const payload = { websiteId, pageId: page._id || page.id, slug: page.slug, path: window.location.pathname + window.location.search, referrer: document.referrer, type: 'view' };
     try {
       const r = analyticsService.track(payload);
@@ -130,7 +162,7 @@ export default function PublicSite() {
   const theme = site?.theme || {};
 
   return (
-    <div className="min-h-screen bg-white" style={{ fontSize: theme.baseSize || 16 }}>
+    <div className="min-h-screen" style={{ fontSize: theme.baseSize || 16, background: 'var(--sf-background, #ffffff)', color: 'var(--sf-text, #111827)' }}>
       <Renderer tree={tree} mode="live" theme={theme} website={site} pages={pages} navigate={goPage} />
     </div>
   );

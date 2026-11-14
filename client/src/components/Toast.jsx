@@ -18,10 +18,11 @@ const accents = {
 
 export function Toast({ toast }) {
   const dismissToast = useUiStore((s) => s.dismissToast);
+  const isError = toast.type === 'error';
   return (
     <div
-      role="status"
-      aria-live="polite"
+      role={isError ? 'alert' : 'status'}
+      aria-live={isError ? 'assertive' : 'polite'}
       className={cn(
         'pointer-events-auto flex w-80 max-w-[calc(100vw-2rem)] items-start gap-2.5 rounded-xl border bg-white px-4 py-3 shadow-pop animate-slide-in-right dark:bg-slate-900',
         accents[toast.type] || accents.info
@@ -43,7 +44,15 @@ export function Toast({ toast }) {
 export function Toaster() {
   const toasts = useUiStore((s) => s.toasts);
   return (
-    <div className="pointer-events-none fixed right-4 top-4 z-[70] flex flex-col gap-2" aria-label="Notifications">
+    <div
+      role="region"
+      aria-label="Notifications"
+      className="pointer-events-none fixed z-[70] flex flex-col gap-2"
+      style={{
+        top: 'max(1rem, env(safe-area-inset-top))',
+        right: 'max(1rem, env(safe-area-inset-right))',
+      }}
+    >
       {toasts.map((t) => (
         <Toast key={t.id} toast={t} />
       ))}

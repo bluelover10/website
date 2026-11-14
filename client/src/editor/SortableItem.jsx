@@ -18,10 +18,11 @@ export default function SortableItem({ node, selected, onSelect, children }) {
   const duplicateNode = useEditorStore((s) => s.duplicateNode);
   const removeNode = useEditorStore((s) => s.removeNode);
   const setTree = useEditorStore((s) => s.setTree);
-  const tree = useEditorStore((s) => s.tree);
 
   const move = (dir) => {
-    const t = moveNodeSibling(tree, node.id, dir);
+    // Read tree on demand (getState) — subscribing every node to the whole tree
+    // re-rendered the entire canvas on every keystroke.
+    const t = moveNodeSibling(useEditorStore.getState().tree, node.id, dir);
     setTree(t, { history: true });
   };
 
@@ -35,14 +36,14 @@ export default function SortableItem({ node, selected, onSelect, children }) {
       className={`group/sort relative rounded-lg ${selected ? 'outline outline-2 outline-primary-500 outline-offset-2' : 'hover:outline hover:outline-1 hover:outline-primary-300 hover:outline-offset-2'} ${isDragging ? 'z-50' : ''}`}
       data-node-id={node.id}
     >
-      {/* drag handle */}
+      {/* drag handle — always rendered (keyboard/touch reachable), revealed on hover or focus; kept inside the block so the canvas card's overflow-hidden doesn't clip it */}
       <button
         {...attributes}
         {...listeners}
         onClick={stop}
         title="Drag to reorder"
         aria-label={`Drag to reorder ${node.type}`}
-        className="absolute -left-7 top-1 z-20 hidden h-6 w-6 cursor-grab items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 shadow-xs transition-colors hover:text-primary-600 active:cursor-grabbing group-hover/sort:flex dark:border-slate-700 dark:bg-slate-800"
+        className={`absolute left-1 top-1 z-20 flex h-6 w-6 cursor-grab touch-none items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 shadow-xs transition-opacity hover:text-primary-600 active:cursor-grabbing dark:border-slate-700 dark:bg-slate-800 ${selected ? 'opacity-100' : 'opacity-0 group-hover/sort:opacity-100 group-focus-within/sort:opacity-100 focus-visible:opacity-100'}`}
       >
         <GripVertical size={13} />
       </button>
@@ -52,7 +53,7 @@ export default function SortableItem({ node, selected, onSelect, children }) {
       {selected && (
         <div
           onClick={stop}
-          className="absolute -top-8 right-0 z-30 flex animate-scale-in items-center gap-0.5 rounded-lg border border-slate-200 bg-white px-1 py-0.5 shadow-pop dark:border-slate-700 dark:bg-slate-900"
+          className="absolute top-1 right-1 z-30 flex animate-scale-in items-center gap-0.5 rounded-lg border border-slate-200 bg-white px-1 py-0.5 shadow-pop dark:border-slate-700 dark:bg-slate-900"
         >
           <span className="select-none px-1.5 font-mono text-2xs text-slate-400">{node.type}</span>
           <button title="Move up" onClick={() => move(-1)} className="rounded p-1 text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"><ArrowUp size={13} /></button>

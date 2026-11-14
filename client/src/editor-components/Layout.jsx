@@ -38,7 +38,7 @@ export function Section({ node, mode, children, isSelected, onSelect }) {
   return (
     <div
       onClick={edit ? (e) => { e.stopPropagation(); onSelect && onSelect(node.id); } : undefined}
-      style={{ background: p.background || '#f8fafc', padding: `${px(p.padding ?? 64)} 16px`, margin: px(p.margin ?? 0) }}
+      style={{ background: p.background || 'var(--sf-background, #f8fafc)', padding: `${px(p.padding ?? 64)} 16px`, margin: px(p.margin ?? 0) }}
     >
       <div style={{ maxWidth: px(p.maxWidth ?? 1200), margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
         {children}
@@ -52,7 +52,7 @@ export function Section({ node, mode, children, isSelected, onSelect }) {
 
 export function Divider({ node }) {
   const p = node.props || {};
-  return <hr style={{ border: 'none', borderTop: `${p.thickness ?? 1}px ${p.style || 'solid'} ${p.color || '#e5e7eb'}`, margin: `${px(p.margin ?? 16)} 0` }} />;
+  return <hr style={{ border: 'none', borderTop: `${p.thickness ?? 1}px ${p.style || 'solid'} ${p.color || 'color-mix(in srgb, var(--sf-text, #111827) 12%, transparent)'}`, margin: `${px(p.margin ?? 16)} 0` }} />;
 }
 
 export function Spacer({ node }) {

@@ -56,5 +56,7 @@ const websiteSchema = new mongoose.Schema(
 );
 
 websiteSchema.index({ owner: 1, createdAt: -1 });
+// listWebsites sorts by updatedAt (dashboard recency) — keep it indexed.
+websiteSchema.index({ updatedAt: -1 });
 
 module.exports = mongoose.model('Website', websiteSchema);

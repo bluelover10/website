@@ -1,48 +1,134 @@
 // Properties editor for the selected node. Calls editorStore.updateNode.
-import React from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { useEditorStore } from '../store/editorStore';
 import { findNode } from '../editor/EditorUtils';
 
+// Plain div + real <label htmlFor>: children sit NEXT to the label (never
+// inside it), so nested labels are impossible. The generated id is injected
+// into the (single) control child so the label stays properly associated.
 function Row({ label, children }) {
+  const id = useId();
+  const control = React.isValidElement(children) ? React.cloneElement(children, { id }) : children;
   return (
-    <label className="mb-3 block">
-      <span className="mb-1 block text-2xs font-semibold text-slate-500 dark:text-slate-400">{label}</span>
-      {children}
-    </label>
+    <div className="mb-3">
+      <label htmlFor={id} className="mb-1 block text-2xs font-semibold text-slate-500 dark:text-slate-400">
+        {label}
+      </label>
+      {control}
+    </div>
   );
 }
 const ti = 'w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 shadow-xs transition focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100';
 
-function TextInput({ value, onChange, placeholder }) {
-  return <input className={ti} value={value ?? ''} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />;
+function TextInput({ id, value, onChange, placeholder }) {
+  return <input id={id} className={ti} value={value ?? ''} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />;
 }
-function TextArea({ value, onChange, rows = 3 }) {
-  return <textarea className={`${ti} resize-y font-mono leading-relaxed`} rows={rows} value={value ?? ''} onChange={(e) => onChange(e.target.value)} />;
+function TextArea({ id, value, onChange, rows = 3 }) {
+  return <textarea id={id} className={`${ti} resize-y font-mono leading-relaxed`} rows={rows} value={value ?? ''} onChange={(e) => onChange(e.target.value)} />;
 }
-function ColorInput({ value, onChange }) {
+function ColorInput({ id, value, onChange }) {
   return (
     <div className="flex items-center gap-2">
-      <label className="relative h-7 w-9 shrink-0 cursor-pointer overflow-hidden rounded-md border border-slate-200 dark:border-slate-700" aria-label="Pick color">
+      {/* span (not label) so Row's label association stays un-nested; the
+          invisible color input covers the swatch, so clicks still reach it */}
+      <span className="relative h-7 w-9 shrink-0 cursor-pointer overflow-hidden rounded-md border border-slate-200 dark:border-slate-700">
         <span className="absolute inset-1 rounded" style={{ background: value || '#5b4fd6' }} />
-        <input type="color" value={/^#[0-9a-fA-F]{6}$/.test(value || '') ? value : '#5b4fd6'} onChange={(e) => onChange(e.target.value)} className="absolute inset-0 cursor-pointer opacity-0" />
-      </label>
-      <input className={`${ti} font-mono`} value={value ?? ''} onChange={(e) => onChange(e.target.value)} placeholder="#000000" />
+        <input
+          type="color"
+          aria-label="Pick color"
+          value={/^#[0-9a-fA-F]{6}$/.test(value || '') ? value : '#5b4fd6'}
+          onChange={(e) => onChange(e.target.value)}
+          className="absolute inset-0 cursor-pointer opacity-0"
+        />
+      </span>
+      <input id={id} className={`${ti} font-mono`} value={value ?? ''} onChange={(e) => onChange(e.target.value)} placeholder="#000000" />
     </div>
   );
 }
-function RangeInput({ value, min = 0, max = 200, onChange }) {
+function RangeInput({ id, value, min = 0, max = 200, onChange }) {
   return (
     <div className="flex items-center gap-2">
-      <input type="range" min={min} max={max} value={Number(value) || 0} onChange={(e) => onChange(Number(e.target.value))} className="flex-1 accent-[#5b4fd6]" />
+      <input id={id} type="range" min={min} max={max} value={Number(value) || 0} onChange={(e) => onChange(Number(e.target.value))} className="flex-1 accent-[#5b4fd6]" />
       <input type="number" className="w-16 rounded-md border border-slate-200 px-1.5 py-1 text-xs tabular-nums dark:border-slate-700 dark:bg-slate-900" value={Number(value) || 0} onChange={(e) => onChange(Number(e.target.value))} />
     </div>
   );
 }
-function SelectInput({ value, options, onChange }) {
+function SelectInput({ id, value, options, onChange }) {
   return (
-    <select className={ti} value={value} onChange={(e) => onChange(e.target.value)}>
+    <select id={id} className={ti} value={value} onChange={(e) => onChange(e.target.value)}>
       {options.map((o) => <option key={o.value ?? o} value={o.value ?? o}>{o.label ?? o}</option>)}
     </select>
+  );
+}
+
+// Editable JSON list field. The draft lives in local state, so typing never
+// snaps back: valid JSON commits live, invalid JSON just flags an inline error.
+function JsonField({ label, value, onChange, rows = 5 }) {
+  const id = useId();
+  const incoming = JSON.stringify(value ?? [], null, 1);
+  const [draft, setDraft] = useState(incoming);
+  const [error, setError] = useState('');
+  // Serialized form of the value last sent to onChange — lets us tell our own
+  // commit echoes (skip) apart from external value changes (sync the draft).
+  const lastCommitRef = useRef(incoming);
+
+  const handleChange = (text) => {
+    setDraft(text);
+    try {
+      const parsed = JSON.parse(text);
+      lastCommitRef.current = JSON.stringify(parsed, null, 1);
+      setError('');
+      onChange(parsed);
+    } catch {
+      setError('Invalid JSON — fix before it saves');
+    }
+  };
+
+  useEffect(() => {
+    if (incoming !== lastCommitRef.current) {
+      // External change (undo, switching nodes): adopt it, drop stale errors.
+      lastCommitRef.current = incoming;
+      setDraft(incoming);
+      setError('');
+    }
+  }, [incoming]);
+
+  const handleBlur = () => {
+    try {
+      const parsed = JSON.parse(draft);
+      const normalized = JSON.stringify(parsed, null, 1);
+      if (normalized !== draft) {
+        // Tidy the formatting on blur so the visible text matches what was saved.
+        lastCommitRef.current = normalized;
+        setDraft(normalized);
+        setError('');
+      }
+      if (JSON.stringify(parsed) !== JSON.stringify(value ?? [])) onChange(parsed);
+    } catch {
+      // Still invalid: the inline error stays until the text parses.
+    }
+  };
+
+  return (
+    <div className="mb-3">
+      <label htmlFor={id} className="mb-1 block text-2xs font-semibold text-slate-500 dark:text-slate-400">
+        {label}
+      </label>
+      <textarea
+        id={id}
+        className={`${ti} resize-y font-mono leading-relaxed`}
+        rows={rows}
+        value={draft}
+        spellCheck="false"
+        onChange={(e) => handleChange(e.target.value)}
+        onBlur={handleBlur}
+      />
+      {error && (
+        <p role="alert" className="mt-1 text-xs text-red-500">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -76,7 +162,7 @@ export default function RightPanel() {
     <div className="h-full overflow-auto p-3">
       <div className="mb-3 flex items-center justify-between border-b border-slate-100 pb-2 dark:border-slate-800">
         <span className="rounded-md bg-primary-100 px-2 py-0.5 text-2xs font-bold uppercase tracking-wider text-primary-700 dark:bg-primary-900/40 dark:text-primary-200">{node.type}</span>
-        <span className="font-mono text-2xs text-slate-300 dark:text-slate-600">{node.id.slice(-6)}</span>
+        <span className="font-mono text-2xs text-slate-400 dark:text-slate-500">{node.id.slice(-6)}</span>
       </div>
 
       {(node.type === 'heading' || node.type === 'text' || node.type === 'link' || node.type === 'button') && (
@@ -210,12 +296,12 @@ export default function RightPanel() {
           {node.type === 'featureGrid' && (
             <>
               <Row label="Columns"><RangeInput value={p.columns ?? 3} min={1} max={4} onChange={(v) => set({ columns: v })} /></Row>
-              <Row label="Features JSON"><TextArea rows={5} value={JSON.stringify(p.features || [], null, 1)} onChange={(v) => { try { set({ features: JSON.parse(v) }); } catch {} }} /></Row>
+              <JsonField label="Features JSON" value={p.features || []} onChange={(v) => set({ features: v })} rows={5} />
             </>
           )}
-          {node.type === 'testimonials' && <Row label="Items JSON"><TextArea rows={5} value={JSON.stringify(p.items || [], null, 1)} onChange={(v) => { try { set({ items: JSON.parse(v) }); } catch {} }} /></Row>}
-          {node.type === 'pricing' && <Row label="Plans JSON"><TextArea rows={6} value={JSON.stringify(p.plans || [], null, 1)} onChange={(v) => { try { set({ plans: JSON.parse(v) }); } catch {} }} /></Row>}
-          {node.type === 'faq' && <Row label="Q/A JSON"><TextArea rows={6} value={JSON.stringify(p.items || [], null, 1)} onChange={(v) => { try { set({ items: JSON.parse(v) }); } catch {} }} /></Row>}
+          {node.type === 'testimonials' && <JsonField label="Items JSON" value={p.items || []} onChange={(v) => set({ items: v })} rows={5} />}
+          {node.type === 'pricing' && <JsonField label="Plans JSON" value={p.plans || []} onChange={(v) => set({ plans: v })} rows={6} />}
+          {node.type === 'faq' && <JsonField label="Q/A JSON" value={p.items || []} onChange={(v) => set({ items: v })} rows={6} />}
           {node.type === 'contactForm' && (
             <>
               <Row label="Subtitle"><TextInput value={p.subtitle} onChange={(v) => set({ subtitle: v })} /></Row>
@@ -224,7 +310,7 @@ export default function RightPanel() {
           )}
           {node.type === 'socialLinks' && (
             <>
-              <Row label="Links JSON"><TextArea rows={4} value={JSON.stringify(p.links || [], null, 1)} onChange={(v) => { try { set({ links: JSON.parse(v) }); } catch {} }} /></Row>
+              <JsonField label="Links JSON" value={p.links || []} onChange={(v) => set({ links: v })} rows={4} />
               <Row label="Icon size"><RangeInput value={p.iconSize ?? 20} min={12} max={48} onChange={(v) => set({ iconSize: v })} /></Row>
               <Row label="Color"><ColorInput value={p.color} onChange={(v) => set({ color: v })} /></Row>
             </>

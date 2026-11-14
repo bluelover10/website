@@ -23,14 +23,26 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error?.response?.status === 401) {
+      let hadToken = false;
       try {
+        hadToken = Boolean(localStorage.getItem('siteforge_token'));
         localStorage.removeItem('siteforge_token');
         localStorage.removeItem('siteforge_user');
       } catch {
         // ignore
       }
-      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-        // avoid hard redirect loops during editor autosave; let ProtectedRoute handle it
+      // Tell the auth store to drop its in-memory session (it listens for this
+      // event exactly once); ProtectedRoute then redirects because
+      // isAuthenticated flips false. Guards:
+      //  - never on /login (avoids loops when the login call itself 401s)
+      //  - only when a token was actually present (the unauthenticated
+      //    authService.logout() ping must not re-trigger the event)
+      if (
+        typeof window !== 'undefined' &&
+        hadToken &&
+        !window.location.pathname.startsWith('/login')
+      ) {
+        window.dispatchEvent(new CustomEvent('siteforge:unauthorized'));
       }
     }
     return Promise.reject(normalizeError(error));
@@ -40,8 +52,20 @@ api.interceptors.response.use(
 export function normalizeError(error) {
   const res = error?.response;
   const data = res?.data;
+  // Friendly copy for timeouts / unreachable servers — these never have a
+  // server-provided message, so they win outright.
+  const networkMessage =
+    error?.code === 'ECONNABORTED'
+      ? 'The request timed out. Please check your connection and try again.'
+      : error?.code === 'ERR_NETWORK'
+        ? 'Network error — could not reach the server.'
+        : null;
   const message =
-    data?.message || data?.error || error?.message || 'Something went wrong. Please try again.';
+    networkMessage ||
+    data?.message ||
+    data?.error ||
+    error?.message ||
+    'Something went wrong. Please try again.';
   const err = new Error(message);
   err.status = res?.status;
   err.data = data;

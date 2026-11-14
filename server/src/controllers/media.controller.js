@@ -13,17 +13,30 @@ const uploadMedia = asyncHandler(async (req, res) => {
   if (!req.file) {
     throw new ApiError(400, 'No file uploaded', 'NO_FILE');
   }
-  const stored = await storeFile(req.file);
-  const media = await Media.create({
-    userId: req.user.id,
-    websiteId,
-    filename: req.file.originalname,
-    url: stored.url,
-    publicId: stored.publicId || '',
-    mimeType: req.file.mimetype,
-    size: req.file.size,
-  });
-  return sendSuccess(res, { media }, 'File uploaded', 201);
+  let stored;
+  try {
+    stored = await storeFile(req.file);
+    const media = await Media.create({
+      userId: req.user.id,
+      websiteId,
+      filename: req.file.originalname,
+      url: stored.url,
+      publicId: stored.publicId || '',
+      mimeType: req.file.mimetype,
+      size: req.file.size,
+    });
+    return sendSuccess(res, { media }, 'File uploaded', 201);
+  } catch (err) {
+    // DB write failed — don't leave an orphaned file behind.
+    if (req.file?.path) {
+      await require('fs').promises.unlink(req.file.path).catch(() => {});
+    }
+    if (stored?.provider === 'cloudinary' && stored.publicId) {
+      const { destroyFromCloudinary } = require('../config/cloudinary');
+      await destroyFromCloudinary(stored.publicId).catch(() => {});
+    }
+    throw err;
+  }
 });
 
 const listMedia = asyncHandler(async (req, res) => {

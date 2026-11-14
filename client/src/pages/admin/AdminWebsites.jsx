@@ -25,11 +25,13 @@ export function AdminWebsites() {
   const [status, setStatus] = useState('');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const debounceRef = useRef(null);
 
   const fetchSites = useCallback(
     async (opts = {}) => {
       setLoading(true);
+      setError(null);
       try {
         const params = { page: opts.page ?? 1, limit: 20 };
         if ((opts.search ?? search).trim()) params.search = (opts.search ?? search).trim();
@@ -37,6 +39,7 @@ export function AdminWebsites() {
         const res = await adminService.websites(params);
         setData(res);
       } catch (e) {
+        setError(e);
         pushToast({ message: e.message, type: 'error' });
       } finally {
         setLoading(false);
@@ -108,7 +111,7 @@ export function AdminWebsites() {
             <Badge variant="primary"><ShieldCheck size={12} /> Admin</Badge>
           </h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            {loading ? 'Loading…' : `${total} site${total === 1 ? '' : 's'} across every account.`}
+            {loading ? 'Loading…' : error ? 'Could not load sites.' : `${total} site${total === 1 ? '' : 's'} across every account.`}
           </p>
         </div>
       </Reveal>
@@ -143,6 +146,16 @@ export function AdminWebsites() {
           {/* Rows */}
           {loading && !data ? (
             <SkeletonText lines={5} className="mt-4" />
+          ) : error ? (
+            <div
+              role="alert"
+              className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300"
+            >
+              <span>{error.message}</span>
+              <Button size="sm" variant="outline" onClick={() => fetchSites({ search, status, page: data?.page ?? 1 })}>
+                Retry
+              </Button>
+            </div>
           ) : sites.length === 0 ? (
             <EmptyState
               icon={<Globe size={28} />}

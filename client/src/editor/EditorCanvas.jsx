@@ -1,7 +1,7 @@
 // Center canvas: DndContext + SortableContext, renders tree via Renderer in edit mode.
 import React, { useMemo } from 'react';
 import { useDroppable } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { SortableContext } from '@dnd-kit/sortable';
 import { MousePointerClick } from 'lucide-react';
 import { useEditorStore } from '../store/editorStore';
 import { allIds } from './EditorUtils';
@@ -26,7 +26,10 @@ function CanvasBody({ website, pages, theme }) {
           <span>{viewport} · {WIDTHS[viewport]}</span>
           <span>{(tree?.children || []).length} blocks</span>
         </div>
-        <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+        {/* No strategy: items are a DFS flatten of a nested tree, so sortable
+            transform previews would lie about positions. DragOverlay chip +
+            hover outlines + drop indicator give feedback instead. */}
+        <SortableContext items={ids}>
           <div
             ref={setNodeRef}
             onClick={(e) => e.stopPropagation()}

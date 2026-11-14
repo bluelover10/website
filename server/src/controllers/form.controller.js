@@ -8,6 +8,10 @@ function websiteIdOf(req) {
   return req.params.websiteId || req.website?._id?.toString();
 }
 
+// formId flows into Mongo filters and storage — restrict to a safe token shape
+// so query/operator values can never pass through.
+const SAFE_FORM_ID = /^[a-zA-Z0-9_-]{1,64}$/;
+
 // Public: submit a form (no auth). Website must exist.
 const submitForm = asyncHandler(async (req, res) => {
   const websiteId = req.params.websiteId;
@@ -17,12 +21,16 @@ const submitForm = asyncHandler(async (req, res) => {
   const submission = await FormSubmission.create({
     websiteId: website._id,
     pageId: pageId || null,
-    formId,
+    formId: SAFE_FORM_ID.test(String(formId || '')) ? formId : 'contact',
     data: data || {},
     ip: req.ip,
     userAgent: req.headers['user-agent'] || '',
   });
-  return sendSuccess(res, { submission }, 'Form submitted', 201);
+  // Don't hand the submitter back their spoofable IP / user-agent.
+  const safe = submission.toObject();
+  delete safe.ip;
+  delete safe.userAgent;
+  return sendSuccess(res, { submission: safe }, 'Form submitted', 201);
 });
 
 const listSubmissions = asyncHandler(async (req, res) => {
@@ -31,7 +39,9 @@ const listSubmissions = asyncHandler(async (req, res) => {
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
   const skip = (page - 1) * limit;
   const filter = { websiteId };
-  if (req.query.formId) filter.formId = req.query.formId;
+  if (req.query.formId && SAFE_FORM_ID.test(String(req.query.formId))) {
+    filter.formId = req.query.formId;
+  }
   const [total, submissions] = await Promise.all([
     FormSubmission.countDocuments(filter),
     FormSubmission.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),

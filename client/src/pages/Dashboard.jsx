@@ -1,11 +1,11 @@
 import { useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Globe, Rocket, FileText, Eye, Plus, Pencil, ExternalLink, Copy, Trash2, LayoutTemplate, Image as ImageIcon, TrendingUp, ArrowRight } from 'lucide-react';
+import { Globe, Rocket, FileText, Eye, Plus, Pencil, ExternalLink, Copy, Trash2, LayoutTemplate, Image as ImageIcon, TrendingUp, ArrowRight, Inbox, BarChart3, Users, Settings } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, Tooltip } from 'recharts';
 import useWebsiteStore from '../store/websiteStore.js';
 import useUiStore from '../store/uiStore.js';
 import Card, { CardTitle } from '../components/Card.jsx';
-import Button from '../components/Button.jsx';
+import Button, { ButtonLink } from '../components/Button.jsx';
 import Badge from '../components/Badge.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import Reveal from '../components/Reveal.jsx';
@@ -15,26 +15,44 @@ function idOf(w) {
   return w._id || w.id;
 }
 
-const chartTooltipStyle = {
+// Per-site feature routes that had no entry point anywhere in the UI.
+const siteQuickLinks = [
+  { to: 'submissions', label: 'Form submissions', icon: Inbox },
+  { to: 'analytics', label: 'Analytics', icon: BarChart3 },
+  { to: 'team', label: 'Team', icon: Users },
+  { to: 'settings', label: 'Settings', icon: Settings },
+];
+
+const chartTooltipStyle = (dark) => ({
   borderRadius: '0.75rem',
-  border: '1px solid rgba(91,79,214,0.15)',
-  boxShadow: '0 8px 24px -8px rgba(28,23,71,0.25)',
+  border: dark ? '1px solid rgba(139,131,255,0.25)' : '1px solid rgba(91,79,214,0.15)',
+  backgroundColor: dark ? '#1b1830' : '#ffffff',
+  color: dark ? '#e2e8f0' : '#1e1b3a',
+  boxShadow: dark ? '0 8px 24px -8px rgba(0,0,0,0.55)' : '0 8px 24px -8px rgba(28,23,71,0.25)',
   fontSize: '12px',
-};
+});
 
 export function Dashboard() {
   const navigate = useNavigate();
   const websites = useWebsiteStore((s) => s.websites);
   const loading = useWebsiteStore((s) => s.loading);
+  const error = useWebsiteStore((s) => s.error);
   const fetchWebsites = useWebsiteStore((s) => s.fetchWebsites);
   const duplicateWebsite = useWebsiteStore((s) => s.duplicateWebsite);
   const deleteWebsite = useWebsiteStore((s) => s.deleteWebsite);
   const publishWebsite = useWebsiteStore((s) => s.publishWebsite);
   const pushToast = useUiStore((s) => s.pushToast);
   const askConfirm = useUiStore((s) => s.askConfirm);
+  const darkMode = useUiStore((s) => s.darkMode);
+
+  const load = () => {
+    // Failures land in the store as `error`; caught here to avoid unhandled rejections.
+    fetchWebsites().catch(() => {});
+  };
 
   useEffect(() => {
-    fetchWebsites().catch(() => {});
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchWebsites]);
 
   const stats = useMemo(() => {
@@ -117,6 +135,17 @@ export function Dashboard() {
         </Button>
       </Reveal>
 
+      {/* Load failure — never render zeros/empty states as if they were real */}
+      {error && !loading && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/50 dark:bg-red-950/40"
+        >
+          <p className="text-sm font-medium text-red-700 dark:text-red-300">Could not load your dashboard.</p>
+          <Button size="sm" variant="outline" onClick={load}>Retry</Button>
+        </div>
+      )}
+
       {/* Stat cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map(({ label, value, icon: Icon, tint }, i) => (
@@ -157,7 +186,11 @@ export function Dashboard() {
                       </linearGradient>
                     </defs>
                     <XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false} tick={{ fill: '#9d99b5' }} />
-                    <Tooltip contentStyle={chartTooltipStyle} />
+                    <Tooltip
+                      contentStyle={chartTooltipStyle(darkMode)}
+                      itemStyle={{ color: darkMode ? '#c7c5e8' : '#3d3a63' }}
+                      labelStyle={{ color: darkMode ? '#e2e8f0' : '#1e1b3a', fontWeight: 600 }}
+                    />
                     <Area type="monotone" dataKey="views" stroke="#5b4fd6" strokeWidth={2.5} fill="url(#dashViews)" animationDuration={800} />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -204,14 +237,14 @@ export function Dashboard() {
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {[0, 1, 2].map((i) => <SkeletonCard key={i} />)}
           </div>
-        ) : websites.length === 0 ? (
+        ) : websites.length === 0 && !error ? (
           <EmptyState
             icon={<Globe size={30} />}
             title="No sites yet"
             description="Create your first website from scratch or start from a polished template."
             action={<Button variant="gradient" onClick={() => navigate('/websites/new')}><Plus size={16} /> Create site</Button>}
           />
-        ) : (
+        ) : websites.length === 0 ? null : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {websites.slice(0, 6).map((site, i) => {
               const siteId = idOf(site);
@@ -236,6 +269,18 @@ export function Dashboard() {
                         <Button size="xs" variant="ghost" onClick={() => handlePublish(site)}>Publish</Button>
                       )}
                       <span className="flex-1" />
+                      {siteQuickLinks.map(({ to, label, icon: Icon }) => (
+                        <ButtonLink
+                          key={to}
+                          to={`/websites/${siteId}/${to}`}
+                          size="xs"
+                          variant="ghost"
+                          aria-label={label}
+                          title={label}
+                        >
+                          <Icon size={12} />
+                        </ButtonLink>
+                      ))}
                       <Button size="xs" variant="ghost" onClick={() => handleDuplicate(site)} aria-label={`Duplicate ${site.name}`}><Copy size={12} /></Button>
                       <Button size="xs" variant="ghost" onClick={() => handleDelete(site)} aria-label={`Delete ${site.name}`} className="hover:text-red-600"><Trash2 size={12} /></Button>
                     </div>

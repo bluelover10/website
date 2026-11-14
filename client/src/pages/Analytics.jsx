@@ -4,6 +4,7 @@ import { useParams, Link } from 'react-router-dom';
 import { Eye, CalendarDays, TrendingUp, FileText, ArrowLeft, BarChart3, ListOrdered } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import analyticsService from '../services/analytics.service';
+import useUiStore from '../store/uiStore.js';
 import Card, { CardTitle } from '../components/Card.jsx';
 import Badge from '../components/Badge.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -29,16 +30,21 @@ function StatCard({ icon: Icon, label, value, sub, delay }) {
   );
 }
 
-const tooltipStyle = {
-  borderRadius: '0.75rem',
-  border: '1px solid rgba(91,79,214,0.15)',
-  boxShadow: '0 8px 24px -8px rgba(28,23,71,0.25)',
-  fontSize: '12px',
-};
-
 export default function Analytics() {
   const { websiteId: websiteIdParam, id: idParam } = useParams();
   const websiteId = websiteIdParam || idParam;
+  const dark = useUiStore((s) => s.darkMode);
+  // Recharts tooltips render as plain divs — theme them manually or the
+  // default white panel is unreadable against the dark background.
+  const tooltipStyle = {
+    borderRadius: '0.75rem',
+    border: dark ? '1px solid #312e5f' : '1px solid rgba(91,79,214,0.15)',
+    backgroundColor: dark ? '#1b1830' : '#ffffff',
+    color: dark ? '#eceaf6' : '#14121f',
+    boxShadow: '0 8px 24px -8px rgba(28,23,71,0.25)',
+    fontSize: '12px',
+  };
+  const tooltipItemStyle = { color: dark ? '#eceaf6' : '#14121f' };
   const [data, setData] = useState(null);
   const [status, setStatus] = useState('loading');
   const [err, setErr] = useState(null);
@@ -123,7 +129,7 @@ export default function Analytics() {
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(91,79,214,0.12)" vertical={false} />
                       <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9d99b5' }} tickLine={false} axisLine={false} />
                       <YAxis tick={{ fontSize: 11, fill: '#9d99b5' }} allowDecimals={false} tickLine={false} axisLine={false} />
-                      <Tooltip contentStyle={tooltipStyle} />
+                      <Tooltip contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} />
                       <Line type="monotone" dataKey="views" stroke="#5b4fd6" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} fill="url(#lineFill)" animationDuration={800} />
                     </LineChart>
                   </ResponsiveContainer>
@@ -151,7 +157,7 @@ export default function Analytics() {
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(91,79,214,0.12)" horizontal={false} />
                         <XAxis type="number" tick={{ fontSize: 11, fill: '#9d99b5' }} allowDecimals={false} tickLine={false} axisLine={false} />
                         <YAxis type="category" dataKey="pagePath" tick={{ fontSize: 11, fill: '#9d99b5' }} width={110} tickLine={false} axisLine={false} />
-                        <Tooltip contentStyle={tooltipStyle} />
+                        <Tooltip contentStyle={tooltipStyle} itemStyle={tooltipItemStyle} />
                         <Bar dataKey="views" fill="#5b4fd6" radius={[0, 6, 6, 0]} animationDuration={800} />
                       </BarChart>
                     </ResponsiveContainer>

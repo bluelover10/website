@@ -45,7 +45,7 @@ export const DEFAULT_PROPS = {
     columns: [{ title: 'Product', links: ['Features', 'Pricing'] }, { title: 'Company', links: ['About', 'Contact'] }],
     copyright: '© 2026 SiteForge. All rights reserved.',
   },
-  video: { src: 'https://www.youtube.com/embed/dQw4w9WgXcQ', autoplay: false, controls: true, radius: 12, aspect: '16/9' },
+  video: { src: '', autoplay: false, controls: true, radius: 12, aspect: '16/9' },
   socialLinks: { links: [{ network: 'twitter', href: '#' }, { network: 'github', href: '#' }, { network: 'linkedin', href: '#' }], iconSize: 20, color: '#4b5563', align: 'left' },
 };
 
@@ -96,6 +96,8 @@ export function createNode(type, overrides = {}) {
 }
 
 // ---- Shell-compat aliases (used by client shell pages/hooks) ----
+// Legacy types (features/cta/testimonial/form/columns) removed — they are
+// aliases now (see Renderer.jsx ALIASES); the palette only offers modern types.
 export const COMPONENT_TYPES = [
   'section',
   'container',
@@ -104,18 +106,13 @@ export const COMPONENT_TYPES = [
   'button',
   'image',
   'hero',
-  'features',
   'gallery',
-  'testimonial',
   'pricing',
-  'cta',
   'navbar',
   'footer',
-  'form',
   'video',
   'divider',
   'spacer',
-  'columns',
   'card',
   'link',
   'faq',

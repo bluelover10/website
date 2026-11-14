@@ -34,6 +34,24 @@ export function findParent(tree, id, parent = null) {
   return null;
 }
 
+// Single source of truth for which node types accept children (mirrors the
+// CONTAINERS set in Renderer.jsx: root/container/section/card — featureGrid and
+// gallery render their own items via props, not node.children).
+export const CONTAINER_TYPES = new Set(['root', 'container', 'section', 'card']);
+
+/** Nearest node (self or ancestor) that accepts children — used to resolve
+ * palette drops onto leaf nodes. Falls back to 'root'. */
+export function nearestContainerId(tree, nodeId) {
+  if (!nodeId || nodeId === 'root') return 'root';
+  const node = findNode(tree, nodeId);
+  if (node && CONTAINER_TYPES.has(node.type)) return node.id;
+  let parent = findParent(tree, nodeId);
+  while (parent && !CONTAINER_TYPES.has(parent.type)) {
+    parent = findParent(tree, parent.id);
+  }
+  return parent ? parent.id : 'root';
+}
+
 export function updateNodeDeep(tree, id, props) {
   const t = cloneTree(tree);
   const n = findNode(t, id);

@@ -2,6 +2,7 @@ const express = require('express');
 const { protect } = require('../middleware/auth');
 const { requireWebsiteRole } = require('../middleware/authorize');
 const validate = require('../middleware/validate');
+const { formSubmitLimiter } = require('../middleware/rateLimiters');
 const { submitFormSchema } = require('../validators/form.validator');
 const formController = require('../controllers/form.controller');
 const FormSubmission = require('../models/FormSubmission');
@@ -9,9 +10,9 @@ const FormSubmission = require('../models/FormSubmission');
 const router = express.Router({ mergeParams: true });
 
 // Public submission (nested): POST /api/websites/:websiteId/forms/submit
-router.post('/submit', validate(submitFormSchema), formController.submitForm);
+router.post('/submit', formSubmitLimiter, validate(submitFormSchema), formController.submitForm);
 // Public submission (top-level alias): POST /api/forms/:websiteId/submit
-router.post('/:websiteId/submit', validate(submitFormSchema), formController.submitForm);
+router.post('/:websiteId/submit', formSubmitLimiter, validate(submitFormSchema), formController.submitForm);
 
 // Owner/editor listing (nested or top-level with :websiteId param)
 router.get('/', protect, requireWebsiteRole(['owner', 'editor']), formController.listSubmissions);

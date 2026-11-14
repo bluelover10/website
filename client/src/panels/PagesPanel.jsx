@@ -9,20 +9,50 @@ export default function PagesPanel({ websiteId }) {
   const pages = useEditorStore((s) => s.pages);
   const activePageId = useEditorStore((s) => s.activePageId);
   const setPages = useEditorStore((s) => s.setPages);
+  const loadPageContent = useEditorStore((s) => s.loadPageContent);
   const setActivePage = useEditorStore((s) => s.setActivePage);
   const [editing, setEditing] = useState(null);
   const [draft, setDraft] = useState({ title: '', slug: '' });
   const [busy, setBusy] = useState(false);
+  const [switchingId, setSwitchingId] = useState(null);
   const askConfirm = useUiStore((s) => s.askConfirm);
   const pushToast = useUiStore((s) => s.pushToast);
 
-  const refresh = async (selectId) => {
+  const fail = (e) => pushToast({ message: e?.message || 'Something went wrong', type: 'error' });
+
+  const refreshList = async () => {
     const list = await pagesApi.getPages(websiteId);
-    setPages(Array.isArray(list) ? list : list?.pages || []);
-    if (selectId) setActivePage(selectId);
+    const normalized = Array.isArray(list) ? list : list?.pages || [];
+    setPages(normalized);
+    return normalized;
   };
 
-  const fail = (e) => pushToast({ message: e?.message || 'Something went wrong', type: 'error' });
+  // Selecting a page fetches its FRESH detail so the canvas never shows stale
+  // content from a pages array cached at mount time. Falls back to the cached
+  // copy (with a toast) if the fetch fails, so the editor stays usable offline.
+  const selectPageById = async (id) => {
+    if (!id || id === activePageId || switchingId) return;
+    setSwitchingId(id);
+    try {
+      const detail = await pagesApi.getPage(websiteId, id);
+      const fresh = detail?.page || detail;
+      if (fresh?.content && typeof fresh.content === 'object') {
+        loadPageContent(id, fresh.content);
+      } else {
+        setActivePage(id);
+      }
+    } catch {
+      setActivePage(id);
+      pushToast({ message: 'Could not load latest page content', type: 'error' });
+    } finally {
+      setSwitchingId(null);
+    }
+  };
+
+  const refresh = async (selectId) => {
+    await refreshList();
+    if (selectId) await selectPageById(selectId);
+  };
 
   const create = async () => {
     setBusy(true);
@@ -59,8 +89,17 @@ export default function PagesPanel({ websiteId }) {
     });
     if (!ok) return;
     setBusy(true);
-    try { await pagesApi.deletePage(websiteId, page._id || page.id); await refresh(); pushToast({ message: 'Page deleted', type: 'success' }); }
-    catch (e) { fail(e); } finally { setBusy(false); }
+    try {
+      const id = page._id || page.id;
+      await pagesApi.deletePage(websiteId, id);
+      const remaining = await refreshList();
+      // Never leave activePageId pointing at a deleted page: select the first
+      // remaining page (fresh fetch) when the active one was removed.
+      if (id === activePageId && remaining.length) {
+        await selectPageById(remaining[0]._id || remaining[0].id);
+      }
+      pushToast({ message: 'Page deleted', type: 'success' });
+    } catch (e) { fail(e); } finally { setBusy(false); }
   };
 
   const reorder = async (idx, dir) => {
@@ -70,7 +109,16 @@ export default function PagesPanel({ websiteId }) {
     const [m] = list.splice(idx, 1);
     list.splice(j, 0, m);
     setPages(list);
-    try { await pagesApi.reorderPages(websiteId, list.map((p) => p._id || p.id)); } catch (e) { fail(e); }
+    try {
+      await pagesApi.reorderPages(websiteId, list.map((p) => p._id || p.id));
+    } catch (e) {
+      fail(e);
+      // Roll the optimistic order back to server truth.
+      try {
+        const fresh = await pagesApi.getPages(websiteId);
+        setPages(Array.isArray(fresh) ? fresh : fresh?.pages || []);
+      } catch { /* keep optimistic order; toast already shown */ }
+    }
   };
 
   const setHome = async (page) => {
@@ -95,8 +143,12 @@ export default function PagesPanel({ websiteId }) {
         return (
           <div
             key={id}
-            onClick={() => !isEditing && setActivePage(id)}
-            className={`cursor-pointer rounded-xl border p-2.5 transition-all duration-150 ${active ? 'border-primary-400 bg-primary-50/60 shadow-xs dark:border-primary-700 dark:bg-primary-950/40' : 'border-slate-200 hover:border-slate-300 hover:shadow-xs dark:border-slate-800 dark:hover:border-slate-700'}`}
+            onClick={() => !isEditing && selectPageById(id)}
+            role="button"
+            tabIndex={0}
+            aria-pressed={active}
+            onKeyDown={(e) => { if (!isEditing && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); selectPageById(id); } }}
+            className={`cursor-pointer rounded-xl border p-2.5 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 ${active ? 'border-primary-400 bg-primary-50/60 shadow-xs dark:border-primary-700 dark:bg-primary-950/40' : 'border-slate-200 hover:border-slate-300 hover:shadow-xs dark:border-slate-800 dark:hover:border-slate-700'} ${switchingId === id ? 'animate-pulse' : ''}`}
           >
             {isEditing ? (
               <div className="flex animate-fade-up flex-col gap-1.5" onClick={(e) => e.stopPropagation()}>

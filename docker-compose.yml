@@ -3,8 +3,11 @@ services:
     image: mongo:7
     container_name: siteforge-mongo
     restart: unless-stopped
+    # Bound to localhost only — never expose an unauthenticated Mongo to the
+    # network. For real deployments add auth (MONGO_INITDB_ROOT_USERNAME/PASSWORD)
+    # and credentials in MONGO_URI.
     ports:
-      - "27017:27017"
+      - "127.0.0.1:27017:27017"
     volumes:
       - mongo_data:/data/db
     healthcheck:
@@ -25,12 +28,20 @@ services:
     environment:
       PORT: 5000
       MONGO_URI: mongodb://mongodb:27017/siteforge
+      # ⚠️ PLACEHOLDER — generate a real secret for anything beyond local dev:
+      #   node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
+      # The server warns on placeholders and refuses to boot in production with them.
       JWT_SECRET: change-me-to-a-long-random-string
       JWT_EXPIRES_IN: 7d
-      # Platform admin seeded at boot — override BOTH before deploying.
+      # The compose frontend (nginx) proxies /api to this backend, so X-Forwarded-For
+      # is trusted here for correct rate-limit/IP logging.
+      TRUST_PROXY: "1"
+      # CORS allowlist: Vite dev origin + the compose frontend origin.
+      CLIENT_URL: http://localhost:5173,http://localhost:8080
+      # Platform admin seeded at boot — override BOTH with strong values before
+      # any public deployment (placeholders are rejected in production boots).
       ADMIN_EMAIL: admin@siteforge.app
       ADMIN_PASSWORD: change-me-before-deploying
-      CLIENT_URL: http://localhost:5173
       UPLOAD_DIR: /app/uploads
     volumes:
       - uploads_data:/app/uploads

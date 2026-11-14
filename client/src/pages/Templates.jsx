@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LayoutTemplate, Search, ArrowRight } from 'lucide-react';
 import templateService from '../services/template.service.js';
@@ -24,16 +24,27 @@ export function Templates() {
   const navigate = useNavigate();
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [q, setQ] = useState('');
   const createWebsite = useWebsiteStore((s) => s.createWebsite);
   const pushToast = useUiStore((s) => s.pushToast);
 
-  useEffect(() => {
-    templateService.list()
-      .then((res) => setTemplates(Array.isArray(res) ? res : res?.templates || res?.items || []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await templateService.list();
+      setTemplates(Array.isArray(res) ? res : res?.templates || res?.items || []);
+    } catch (e) {
+      setError(e?.message || 'Could not load templates.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const filtered = useMemo(
     () => templates.filter((t) => !q || t.name?.toLowerCase().includes(q.toLowerCase())),
@@ -62,6 +73,17 @@ export function Templates() {
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search templates…" aria-label="Search templates" className="sf-input pl-9" />
         </div>
       </Reveal>
+
+      {/* Load failure — an empty grid here would look like "no templates" */}
+      {error && !loading && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/50 dark:bg-red-950/40"
+        >
+          <p className="text-sm font-medium text-red-700 dark:text-red-300">Could not load templates.</p>
+          <Button size="sm" variant="outline" onClick={load}>Retry</Button>
+        </div>
+      )}
 
       {loading ? (
         <div className="grid gap-4 md:grid-cols-3">{[0, 1, 2].map((i) => <SkeletonCard key={i} />)}</div>

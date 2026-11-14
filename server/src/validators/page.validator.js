@@ -25,7 +25,9 @@ const updatePageSchema = z.object({
   slug: z.string().max(100).optional(),
   path: z.string().max(200).optional(),
   content: contentNodeSchema.optional(),
-  publishedContent: contentNodeSchema.optional(),
+  // NOTE: publishedContent is intentionally NOT settable here — it is written
+  // only by the publish flow (services/publish.service.js). Letting editors
+  // write it directly would bypass draft/published snapshot isolation.
   seo: z
     .object({
       title: z.string().max(120).optional(),

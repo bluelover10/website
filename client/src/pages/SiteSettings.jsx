@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useState } from 'react';
+import { Navigate, useParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { Trash2, Plus, Palette, Search as SeoIcon, Globe, AlertTriangle } from 'lucide-react';
 import useWebsiteStore from '../store/websiteStore.js';
@@ -41,7 +41,9 @@ export function SiteSettings() {
   const pushToast = useUiStore((s) => s.pushToast);
   const askConfirm = useUiStore((s) => s.askConfirm);
 
-  const [siteId, setSiteId] = useState(id);
+  // Route id wins; bare /settings (no param) falls back to the currently loaded
+  // site so the save actions still have a target.
+  const siteId = id || currentWebsite?._id || currentWebsite?.id || null;
   const { register, handleSubmit, reset, formState: { isSubmitting } } = useForm({
     defaultValues: { name: '', slug: '', description: '', seoTitle: '', seoDescription: '' },
   });
@@ -49,13 +51,19 @@ export function SiteSettings() {
   const [navLinks, setNavLinks] = useState([]);
   const [navSaving, setNavSaving] = useState(false);
   const [themeSaving, setThemeSaving] = useState(false);
+  const [loadError, setLoadError] = useState(null);
+
+  const loadSite = useCallback(() => {
+    if (!id) return;
+    setLoadError(null);
+    fetchWebsite(id).catch((e) => {
+      setLoadError(e?.message || 'Failed to load this site');
+    });
+  }, [id, fetchWebsite]);
 
   useEffect(() => {
-    if (id) {
-      setSiteId(id);
-      fetchWebsite(id).catch(() => {});
-    }
-  }, [id, fetchWebsite]);
+    loadSite();
+  }, [loadSite]);
 
   useEffect(() => {
     if (currentWebsite) {
@@ -70,6 +78,10 @@ export function SiteSettings() {
       setNavLinks(currentWebsite.navigation || currentWebsite.nav || []);
     }
   }, [currentWebsite, reset]);
+
+  // No route id and nothing loaded: every save action would be a no-op, so
+  // don't render a dead half-page — send the user back to the site list.
+  if (!id && !currentWebsite) return <Navigate to="/websites" replace />;
 
   const onSaveGeneral = async (values) => {
     if (!siteId) {
@@ -141,6 +153,17 @@ export function SiteSettings() {
           <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">Site settings</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{currentWebsite?.name || 'Configure name, SEO, theme and navigation.'}</p>
         </Reveal>
+
+        {loadError && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">
+            <span className="flex items-center gap-2">
+              <AlertTriangle size={15} /> {loadError}
+            </span>
+            <Button size="sm" variant="outline" onClick={loadSite}>
+              Retry
+            </Button>
+          </div>
+        )}
 
         <Reveal delay={70}>
           <SectionCard icon={Globe} title="General">

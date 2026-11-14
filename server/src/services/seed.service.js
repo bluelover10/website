@@ -27,8 +27,18 @@ const DEMO_NAME = 'Demo User';
 // exposing the server. Seeded idempotently so boot always ends with exactly one
 // working admin account.
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@siteforge.app').toLowerCase();
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin1234';
 const ADMIN_NAME = process.env.ADMIN_NAME || 'SiteForge Admin';
+
+// Resolved inside seedAdminUser() so an invalid config throws at boot-time
+// (through runSeeds), not at module require time.
+const ADMIN_PASSWORD_PLACEHOLDERS = new Set([
+  'admin1234',
+  'change-me-before-deploying',
+  'change-me',
+  'password',
+  '123456',
+  'admin',
+]);
 
 // ---------------------------------------------------------------------------
 // Node helpers — shapes consumed by client/src/editor/Renderer.jsx
@@ -391,9 +401,10 @@ function templateLibrary() {
 async function seedTemplates() {
   const v2Exists = await Template.exists({ seedVersion: SEED_VERSION });
   if (v2Exists) return { templatesSeeded: false };
-  // Replace stale/legacy public templates (seed data, not user data).
-  await Template.deleteMany({ isPublic: true });
-  await Template.insertMany(templateLibrary());
+  // Replace stale/legacy SEEDED templates only — the isSeeded marker keeps
+  // manually created public templates (user/curator data) out of the wipe.
+  await Template.deleteMany({ isSeeded: true });
+  await Template.insertMany(templateLibrary().map((t) => ({ ...t, isSeeded: true })));
   return { templatesSeeded: true };
 }
 
@@ -565,6 +576,13 @@ async function seedDemoSite() {
 // admin email exists but isn't an admin (e.g. created before this role was
 // wired up), promote it so boot always ends with a working admin.
 async function seedAdminUser() {
+  const isProd = process.env.NODE_ENV === 'production';
+  const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin1234';
+  if (isProd && ADMIN_PASSWORD_PLACEHOLDERS.has(ADMIN_PASSWORD.toLowerCase())) {
+    throw new Error(
+      'ADMIN_PASSWORD is a known placeholder — set a strong ADMIN_PASSWORD env before running in production'
+    );
+  }
   const existing = await User.findOne({ email: ADMIN_EMAIL });
   if (existing) {
     if (existing.role !== 'admin') {
@@ -600,7 +618,8 @@ module.exports = {
   DEMO_PASSWORD,
   DEMO_NAME,
   ADMIN_EMAIL,
-  ADMIN_PASSWORD,
+  // Mirrors what seedAdminUser() resolves at runtime (env value or default).
+  ADMIN_PASSWORD: process.env.ADMIN_PASSWORD || 'admin1234',
   ADMIN_NAME,
   SEED_VERSION,
 };

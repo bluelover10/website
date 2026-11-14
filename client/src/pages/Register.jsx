@@ -29,7 +29,8 @@ export function Register() {
       const { confirmPassword: _omit, ...payload } = values;
       await registerFn(payload);
       pushToast({ message: 'Account created. Welcome!', type: 'success' });
-      navigate('/dashboard');
+      // replace: Back after registering must not return to the form.
+      navigate('/dashboard', { replace: true });
     } catch (e) {
       pushToast({ message: e?.message || 'Registration failed', type: 'error' });
     }

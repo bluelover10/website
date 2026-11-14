@@ -7,13 +7,20 @@ const WebsiteMember = require('../models/WebsiteMember');
 const Page = require('../models/Page');
 const { generateUniqueSlug } = require('../utils/slugify');
 
+function escapeRegex(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 const listTemplates = asyncHandler(async (req, res) => {
   const page = parseInt(req.query.page, 10) || 1;
   const limit = Math.min(50, parseInt(req.query.limit, 10) || 20);
   const skip = (page - 1) * limit;
   const filter = { isPublic: true };
   if (req.query.category) filter.category = req.query.category;
-  if (req.query.search) filter.name = { $regex: req.query.search, $options: 'i' };
+  if (req.query.search) {
+    // Escape before $regex (ReDoS / operator injection).
+    filter.name = { $regex: escapeRegex(req.query.search), $options: 'i' };
+  }
   const [total, templates] = await Promise.all([
     Template.countDocuments(filter),
     Template.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),

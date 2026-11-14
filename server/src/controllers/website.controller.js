@@ -12,11 +12,18 @@ const Media = require('../models/Media');
 const Template = require('../models/Template');
 const { slugify, generateUniqueSlug } = require('../utils/slugify');
 const { publishWebsite, unpublishWebsite } = require('../services/publish.service');
+const { removeStoredFile } = require('../services/storage.service');
 
 function getPagination(req) {
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
   return { page, limit, skip: (page - 1) * limit };
+}
+
+// Escape user-supplied search text before it reaches $regex (prevents ReDoS
+// and operator injection).
+function escapeRegex(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // List websites the user owns or is a member of, with page counts
@@ -34,7 +41,7 @@ const listWebsites = asyncHandler(async (req, res) => {
     filter.status = status;
   }
   if (search) {
-    filter.$and = [{ name: { $regex: search, $options: 'i' } }];
+    filter.$and = [{ name: { $regex: escapeRegex(search), $options: 'i' } }];
   }
 
   const [total, websites] = await Promise.all([
@@ -85,7 +92,10 @@ const getWebsite = asyncHandler(async (req, res) => {
   const website = await Website.findById(req.params.websiteId).lean();
   if (!website) throw new ApiError(404, 'Website not found', 'WEBSITE_NOT_FOUND');
   const pageCount = await Page.countDocuments({ websiteId: website._id });
-  return sendSuccess(res, { website: { ...website, pageCount } }, 'Website fetched');
+  // The published snapshot is a large internal blob served via the public slug
+  // endpoint — don't ship it in every editor payload.
+  const { publishedSnapshot, ...safeWebsite } = website;
+  return sendSuccess(res, { website: { ...safeWebsite, pageCount } }, 'Website fetched');
 });
 
 // Public: published site snapshot by slug (used by PublicSite renderer).
@@ -200,6 +210,9 @@ const deleteWebsite = asyncHandler(async (req, res) => {
     throw new ApiError(403, 'Only the website owner can delete it', 'FORBIDDEN');
   }
   const websiteId = website._id;
+  // Collect media docs first so their storage files (local disk/Cloudinary)
+  // can be removed too — deleting the documents alone would orphan the files.
+  const mediaDocs = await Media.find({ websiteId }).select('url publicId').lean();
   await Promise.all([
     Page.deleteMany({ websiteId }),
     PageVersion.deleteMany({ websiteId }),
@@ -209,6 +222,7 @@ const deleteWebsite = asyncHandler(async (req, res) => {
     PublishVersion.deleteMany({ websiteId }),
     Media.deleteMany({ websiteId }),
   ]);
+  await Promise.all(mediaDocs.map((m) => removeStoredFile(m).catch(() => {})));
   await website.deleteOne();
   return sendSuccess(res, { deleted: true }, 'Website deleted');
 });

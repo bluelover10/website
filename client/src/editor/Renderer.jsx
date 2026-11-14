@@ -9,14 +9,18 @@ import { Navbar, Hero, Card, FeatureGrid, Testimonials, Pricing, Footer, SocialL
 
 const CONTAINERS = new Set(['root', 'container', 'section', 'card']);
 
+// Legacy template types (old seeds/content) → modern equivalents.
+const ALIASES = { features: 'featureGrid', testimonial: 'testimonials', form: 'contactForm', columns: 'container', cta: 'hero' };
+
 export function renderNode(node, ctx) {
   if (!node) return null;
   const { mode = 'preview', theme = {}, website = null, pages = [], navigate = () => {}, onSelect, selectedId } = ctx || {};
+  const type = ALIASES[node.type] || node.type;
   const common = { node, mode, theme, website, pages, navigate, isSelected: selectedId === node.id, onSelect };
   const kids = (node.children || []).map((c) => renderNode(c, ctx));
 
   let el = null;
-  switch (node.type) {
+  switch (type) {
     // 'page' is the legacy root type written by older server seeds/content —
     // treat it exactly like 'root' so published pages don't render blank.
     case 'root':
@@ -52,14 +56,14 @@ export function renderNode(node, ctx) {
   if (el == null) return null;
 
   // In edit mode every non-root node gets sortable + selection wrapper.
-  if (mode === 'edit' && node.type !== 'root' && node.type !== 'page') {
+  if (mode === 'edit' && type !== 'root' && type !== 'page') {
     return (
       <SortableItem key={node.id} node={node} selected={selectedId === node.id} onSelect={onSelect}>
         {el}
       </SortableItem>
     );
   }
-  if (node.type === 'root' || node.type === 'page') return <React.Fragment key="root">{el}</React.Fragment>;
+  if (type === 'root' || type === 'page') return <React.Fragment key="root">{el}</React.Fragment>;
   return <React.Fragment key={node.id}>{el}</React.Fragment>;
 }
 

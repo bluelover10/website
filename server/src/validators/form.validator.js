@@ -1,9 +1,20 @@
 const { z } = require('zod');
 
 const submitFormSchema = z.object({
-  formId: z.string().min(1, 'formId required').max(100),
+  formId: z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/, 'formId contains invalid characters'),
   pageId: z.string().max(50).optional(),
-  data: z.record(z.any()).default({}),
+  // Public endpoint: cap both the number of fields and each value's length so
+  // anonymous callers cannot create multi-KB documents. Scalar values only —
+  // nested objects/arrays are rejected.
+  data: z
+    .record(
+      z.string().max(50),
+      z.union([z.string().max(2000), z.number(), z.boolean()])
+    )
+    .refine((obj) => Object.keys(obj || {}).length <= 20, {
+      message: 'Too many form fields (max 20)',
+    })
+    .default({}),
 });
 
 const listFormsQuerySchema = z.object({
