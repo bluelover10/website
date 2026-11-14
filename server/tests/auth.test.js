@@ -84,4 +84,52 @@ describe('Auth', () => {
     const res = await request(app).post('/api/websites').send({ name: 'NoAuth Site' });
     expect(res.status).toBe(401);
   });
+
+  test('changes password and old password stops working', async () => {
+    const reg = await registerUser('Bob', 'bob@example.com', 'password123');
+    const token = reg.body.data.token;
+
+    const change = await request(app)
+      .patch('/api/auth/password')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ currentPassword: 'password123', newPassword: 'brand-new-pass' });
+    expect(change.status).toBe(200);
+    expect(change.body.success).toBe(true);
+
+    const oldLogin = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'bob@example.com', password: 'password123' });
+    expect(oldLogin.status).toBe(401);
+
+    const newLogin = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'bob@example.com', password: 'brand-new-pass' });
+    expect(newLogin.status).toBe(200);
+  });
+
+  test('rejects password change with wrong current password', async () => {
+    const reg = await registerUser('Cara', 'cara@example.com', 'password123');
+    const res = await request(app)
+      .patch('/api/auth/password')
+      .set('Authorization', `Bearer ${reg.body.data.token}`)
+      .send({ currentPassword: 'wrong-pass-1', newPassword: 'brand-new-pass' });
+    expect(res.status).toBe(400);
+    expect(res.body.errorCode).toBe('WRONG_PASSWORD');
+  });
+
+  test('rejects password change with short new password', async () => {
+    const reg = await registerUser('Dan', 'dan@example.com', 'password123');
+    const res = await request(app)
+      .patch('/api/auth/password')
+      .set('Authorization', `Bearer ${reg.body.data.token}`)
+      .send({ currentPassword: 'password123', newPassword: 'short' });
+    expect(res.status).toBe(400);
+  });
+
+  test('rejects password change without auth', async () => {
+    const res = await request(app)
+      .patch('/api/auth/password')
+      .send({ currentPassword: 'password123', newPassword: 'brand-new-pass' });
+    expect(res.status).toBe(401);
+  });
 });

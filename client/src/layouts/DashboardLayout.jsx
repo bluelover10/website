@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import {
   LayoutDashboard, Globe, LayoutTemplate, Image, Settings, Menu, X,
-  Sun, Moon, Plus, LogOut, ShieldCheck,
+  Sun, Moon, Plus, LogOut, ShieldCheck, UserRound,
 } from 'lucide-react';
 import useUiStore from '../store/uiStore.js';
 import useAuthStore from '../store/authStore.js';
@@ -14,7 +14,26 @@ const links = [
   { to: '/templates', label: 'Templates', icon: LayoutTemplate },
   { to: '/media', label: 'Media', icon: Image },
   { to: '/settings', label: 'Settings', icon: Settings },
+  { to: '/account', label: 'Account', icon: UserRound },
 ];
+
+// Avatar bubble: shows the user's image when they set one, else the initial.
+function AvatarBubble({ user, className = 'h-8 w-8 text-xs' }) {
+  if (user?.avatar) {
+    return (
+      <img
+        src={user.avatar}
+        alt=""
+        className={cn('shrink-0 rounded-full border border-slate-200 object-cover dark:border-slate-700', className)}
+      />
+    );
+  }
+  return (
+    <span className={cn('flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-400 to-primary-600 font-bold text-white', className)}>
+      {(user?.name || user?.email || '?').slice(0, 1).toUpperCase()}
+    </span>
+  );
+}
 
 // Platform admin section — only rendered for accounts with role 'admin'.
 // Access is still enforced server-side on every /api/admin endpoint.
@@ -164,15 +183,19 @@ export function DashboardLayout() {
 
         <div className="border-t border-slate-100 p-3 dark:border-slate-800">
           <div className={cn('flex items-center gap-2.5 rounded-xl bg-slate-50 p-2.5 dark:bg-slate-900', !sidebarOpen && 'justify-center bg-transparent p-0 dark:bg-transparent')}>
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-400 to-primary-600 text-xs font-bold text-white">
-              {(user?.name || user?.email || '?').slice(0, 1).toUpperCase()}
-            </span>
-            {sidebarOpen && (
-              <div className="min-w-0 flex-1 animate-fade-in">
-                <p className="truncate text-xs font-semibold">{user?.name || 'Account'}</p>
-                <p className="truncate text-2xs text-slate-400">{user?.email || ''}</p>
-              </div>
-            )}
+            <Link
+              to="/account"
+              title="Account settings"
+              className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+            >
+              <AvatarBubble user={user} />
+              {sidebarOpen && (
+                <span className="min-w-0 flex-1 animate-fade-in">
+                  <span className="block truncate text-xs font-semibold">{user?.name || 'Account'}</span>
+                  <span className="block truncate text-2xs text-slate-400">{user?.email || ''}</span>
+                </span>
+              )}
+            </Link>
             {sidebarOpen && (
               <button
                 onClick={logout}
@@ -209,16 +232,26 @@ export function DashboardLayout() {
               ))}
             </nav>
             <div className="border-t border-slate-100 p-3 dark:border-slate-800">
-              <div className="flex items-center gap-2.5">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-400 to-primary-600 text-xs font-bold text-white">
-                  {(user?.name || user?.email || '?').slice(0, 1).toUpperCase()}
-                </span>
+              <div className="mb-2.5 flex items-center gap-2.5">
+                <AvatarBubble user={user} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-xs font-semibold">{user?.name || 'Account'}</p>
                   <p className="truncate text-2xs text-slate-400">{user?.email || ''}</p>
                 </div>
-                <button onClick={logout} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-red-500 dark:hover:bg-slate-800" aria-label="Sign out">
-                  <LogOut size={15} />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Link
+                  to="/account"
+                  onClick={() => setMobileNav(false)}
+                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 transition hover:border-primary-400 hover:bg-primary-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:border-slate-700 dark:text-slate-200 dark:hover:border-primary-500 dark:hover:bg-primary-950/30"
+                >
+                  <UserRound size={14} /> Edit profile
+                </Link>
+                <button
+                  onClick={logout}
+                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-red-200 text-xs font-semibold text-red-600 transition hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:border-red-900/60 dark:text-red-400 dark:hover:bg-red-950/40"
+                >
+                  <LogOut size={14} /> Sign out
                 </button>
               </div>
             </div>

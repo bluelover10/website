@@ -18,6 +18,11 @@ const authService = {
     const { data } = await api.patch('/auth/me', payload);
     return data?.data ?? data;
   },
+  async changePassword(payload) {
+    // Server: PATCH /api/auth/password (updatePasswordSchema: {currentPassword, newPassword})
+    const { data } = await api.patch('/auth/password', payload);
+    return data?.data ?? data;
+  },
   async logout() {
     try {
       await api.post('/auth/logout');

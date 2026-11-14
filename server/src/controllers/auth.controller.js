@@ -60,4 +60,22 @@ const updateMe = asyncHandler(async (req, res) => {
   return sendSuccess(res, { user: user.toSafeJSON() }, 'Profile updated');
 });
 
-module.exports = { register, login, me, updateMe };
+// Password change requires the current password (bcrypt compare against the
+// selected hash) so a stolen session alone cannot take over the account.
+const changePassword = asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  const user = await User.findById(req.user.id).select('+passwordHash');
+  if (!user) throw new ApiError(404, 'User not found', 'USER_NOT_FOUND');
+  const ok = await bcrypt.compare(currentPassword || '', user.passwordHash);
+  if (!ok) {
+    throw new ApiError(400, 'Current password is incorrect', 'WRONG_PASSWORD');
+  }
+  if (newPassword === currentPassword) {
+    throw new ApiError(400, 'New password must be different from the current one', 'SAME_PASSWORD');
+  }
+  user.passwordHash = await bcrypt.hash(newPassword, 12);
+  await user.save();
+  return sendSuccess(res, { changed: true }, 'Password updated');
+});
+
+module.exports = { register, login, me, updateMe, changePassword };

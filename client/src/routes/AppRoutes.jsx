@@ -27,6 +27,7 @@ const Analytics = lazy(() => import('../pages/Analytics.jsx'));
 const AdminDashboard = lazy(() => import('../pages/admin/AdminDashboard.jsx'));
 const AdminUsers = lazy(() => import('../pages/admin/AdminUsers.jsx'));
 const AdminWebsites = lazy(() => import('../pages/admin/AdminWebsites.jsx'));
+const Account = lazy(() => import('../pages/Account.jsx'));
 
 // Suspense boundary for lazy pages inside a layout route. It must wrap the
 // layout's outlet CONTENT, not sit above <Routes>: a single outer boundary
@@ -84,6 +85,7 @@ export function AppRoutes() {
             <Route path="/websites/:id/analytics" element={<SuspenseOutlet><Analytics /></SuspenseOutlet>} />
             <Route path="/websites/:id/team" element={<SuspenseOutlet><Team /></SuspenseOutlet>} />
             <Route path="/settings" element={<SuspenseOutlet><SiteSettings /></SuspenseOutlet>} />
+            <Route path="/account" element={<SuspenseOutlet><Account /></SuspenseOutlet>} />
             {/* Platform admin — account role, double-enforced server-side */}
             <Route element={<AdminRoute />}>
               <Route path="/admin" element={<SuspenseOutlet><AdminDashboard /></SuspenseOutlet>} />
