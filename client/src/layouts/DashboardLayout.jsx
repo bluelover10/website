@@ -182,11 +182,21 @@ export function DashboardLayout() {
         </nav>
 
         <div className="border-t border-slate-100 p-3 dark:border-slate-800">
-          <div className={cn('flex items-center gap-2.5 rounded-xl bg-slate-50 p-2.5 dark:bg-slate-900', !sidebarOpen && 'justify-center bg-transparent p-0 dark:bg-transparent')}>
+          <div
+            className={cn(
+              'flex items-center gap-2.5 rounded-xl bg-slate-50 p-2.5 dark:bg-slate-900',
+              // Collapsed rail: stack avatar + logout vertically so sign-out
+              // stays reachable when the sidebar is minimized.
+              !sidebarOpen && 'flex-col bg-transparent p-0 dark:bg-transparent'
+            )}
+          >
             <Link
               to="/account"
               title="Account settings"
-              className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+              className={cn(
+                'flex min-w-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
+                sidebarOpen ? 'flex-1 items-center gap-2.5' : 'justify-center'
+              )}
             >
               <AvatarBubble user={user} />
               {sidebarOpen && (
@@ -196,16 +206,14 @@ export function DashboardLayout() {
                 </span>
               )}
             </Link>
-            {sidebarOpen && (
-              <button
-                onClick={logout}
-                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-white hover:text-red-500 dark:hover:bg-slate-800"
-                aria-label="Sign out"
-                title="Sign out"
-              >
-                <LogOut size={15} />
-              </button>
-            )}
+            <button
+              onClick={logout}
+              className="shrink-0 rounded-lg p-1.5 text-slate-400 transition hover:bg-white hover:text-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:hover:bg-slate-800"
+              aria-label="Sign out"
+              title="Sign out"
+            >
+              <LogOut size={15} />
+            </button>
           </div>
         </div>
       </aside>
