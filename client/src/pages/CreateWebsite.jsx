@@ -27,6 +27,7 @@ export function CreateWebsite() {
   const saving = useWebsiteStore((s) => s.saving);
   const pushToast = useUiStore((s) => s.pushToast);
   const [templates, setTemplates] = useState([]);
+  const [templatesError, setTemplatesError] = useState(false);
   const [mode, setMode] = useState('blank');
   const [selectedTemplate, setSelectedTemplate] = useState('');
 
@@ -43,12 +44,15 @@ export function CreateWebsite() {
     if (!slugTouched.current) setValue('slug', slugify(name || ''));
   }, [name, setValue]);
 
-  useEffect(() => {
+  const loadTemplates = () => {
+    setTemplatesError(false);
     templateService.list().then((res) => {
       const list = Array.isArray(res) ? res : res?.templates || res?.items || [];
       setTemplates(list);
-    }).catch(() => {});
-  }, []);
+    }).catch(() => setTemplatesError(true));
+  };
+
+  useEffect(() => { loadTemplates(); }, []);
 
   const onSubmit = async (values) => {
     try {
@@ -114,12 +118,20 @@ export function CreateWebsite() {
             {mode === 'template' && (
               <div className="animate-fade-up">
                 <span className="sf-label">Choose template</span>
-                <div role="radiogroup" aria-label="Template" className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                  {templates.length === 0 && (
-                    <p className="col-span-full rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-500 dark:border-slate-700">
-                      No templates found. You can still create a blank site.
-                    </p>
-                  )}
+                {templatesError ? (
+                  <div className="flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50/60 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300" role="alert">
+                    <span>Could not load templates.</span>
+                    <button type="button" onClick={loadTemplates} className="rounded-lg border border-red-300 px-2.5 py-1 text-xs font-semibold transition hover:bg-red-100/60 dark:border-red-800 dark:hover:bg-red-900/40">
+                      Retry
+                    </button>
+                  </div>
+                ) : (
+                  <div role="radiogroup" aria-label="Template" className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                    {templates.length === 0 && (
+                      <p className="col-span-full rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-500 dark:border-slate-700">
+                        No templates found. You can still create a blank site.
+                      </p>
+                    )}
                   {templates.map((t) => {
                     const tid = t._id || t.id;
                     const selected = selectedTemplate === tid;
@@ -153,7 +165,8 @@ export function CreateWebsite() {
                       </button>
                     );
                   })}
-                </div>
+                  </div>
+                )}
               </div>
             )}
 
