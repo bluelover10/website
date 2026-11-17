@@ -1,4 +1,4 @@
-# SiteForge — Overhaul Changelog (Nov 2026)
+ # SiteForge — Overhaul Changelog (Nov 2026)
 
 Full quality, security, UX and performance pass over the entire project: server, client, all user roles (owner / editor / viewer / platform admin / public visitors), all breakpoints (mobile 375 / tablet 768 / laptop 1280+).
 
